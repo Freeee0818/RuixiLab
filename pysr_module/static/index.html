@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智析实验</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 900px;
+        }
+        .card {
+            margin-bottom: 20px;
+        }
+        .equation-card {
+            border-left: 3px solid #007bff;
+        }
+        .best-equation {
+            border-left: 3px solid #28a745;
+            background-color: #f8fff8;
+        }
+        .progress {
+            height: 25px;
+        }
+        #result-section {
+            display: none;
+        }
+        .equation-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4 text-center">智析实验</h1>
+        
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">数据上传与配置</h5>
+            </div>
+            <div class="card-body">
+                <form id="regression-form">
+                    <div class="mb-3">
+                        <label for="dataFile" class="form-label">数据文件 (CSV/TXT)</label>
+                        <input class="form-control" type="file" id="dataFile" accept=".csv,.txt" required>
+                        <div class="form-text">文件应包含至少两列数据：x 和 y</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="populationSize" class="form-label">种群大小</label>
+                                <input type="number" class="form-control" id="populationSize" min="10" max="500" value="20">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="iterations" class="form-label">迭代次数</label>
+                                <input type="number" class="form-control" id="iterations" min="10" max="2000" value="100">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="maxsize" class="form-label">最大复杂度</label>
+                                <input type="number" class="form-control" id="maxsize" min="5" max="50" value="20">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">二元运算符</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="+" id="op-add" checked>
+                                    <label class="form-check-label" for="op-add">加法 (+)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="-" id="op-sub" checked>
+                                    <label class="form-check-label" for="op-sub">减法 (-)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="*" id="op-mul" checked>
+                                    <label class="form-check-label" for="op-mul">乘法 (*)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="/" id="op-div" checked>
+                                    <label class="form-check-label" for="op-div">除法 (/)</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">一元运算符</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="exp" id="op-exp" checked>
+                                    <label class="form-check-label" for="op-exp">指数 (exp)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="log" id="op-log" checked>
+                                    <label class="form-check-label" for="op-log">对数 (log)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="sin" id="op-sin" checked>
+                                    <label class="form-check-label" for="op-sin">正弦 (sin)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="cos" id="op-cos" checked>
+                                    <label class="form-check-label" for="op-cos">余弦 (cos)</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button id="submit-btn" type="submit" class="btn btn-primary">开始分析</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div id="progress-section" style="display: none;">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">分析进度</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    <p id="status-message" class="mb-0">正在准备分析...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="result-section">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">分析结果</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h5>最佳方程：</h5>
+                        <div id="best-equation" class="p-3 border rounded best-equation">
+                            <p class="mb-1"><strong>方程：</strong> <span id="best-equation-text">y = f(x)</span></p>
+                            <p class="mb-1"><strong>复杂度：</strong> <span id="best-complexity">0</span></p>
+                            <p class="mb-0"><strong>得分：</strong> <span id="best-score">0</span></p>
+                        </div>
+                    </div>
+                    
+                    <h5>发现的所有方程：</h5>
+                    <div id="equation-list" class="equation-list">
+                        <!-- 方程列表将在这里动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // API基础URL
+        //const API_BASE_URL = 'http://localhost:8000/api';
+        const API_BASE_URL = window.location.origin + '/api'
+        let currentTaskId = null;
+        let pollingInterval = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('regression-form');
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                submitAnalysisTask();
+            });
+        });
+        
+        function submitAnalysisTask() {
+            // 禁用提交按钮
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 处理中...';
+            
+            // 显示进度区域
+            document.getElementById('progress-section').style.display = 'block';
+            document.getElementById('result-section').style.display = 'none';
+            
+            // 收集表单数据
+            const formData = new FormData();
+            
+            // 添加文件
+            const fileInput = document.getElementById('dataFile');
+            if (fileInput.files.length > 0) {
+                formData.append('file', fileInput.files[0]);
+            } else {
+                showError('请选择数据文件');
+                resetForm();
+                return;
+            }
+            
+            // 收集参数
+            const parameters = {
+                population_size: parseInt(document.getElementById('populationSize').value),
+                niterations: parseInt(document.getElementById('iterations').value),
+                maxsize: parseInt(document.getElementById('maxsize').value),
+                binary_operators: getSelectedOperators('op-add', 'op-sub', 'op-mul', 'op-div'),
+                unary_operators: getSelectedOperators('op-exp', 'op-log', 'op-sin', 'op-cos')
+            };
+            
+            formData.append('params', JSON.stringify(parameters));
+            
+            // 发送API请求
+            fetch(`${API_BASE_URL}/tasks`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                currentTaskId = data.task_id;
+                updateStatus('任务已创建，正在处理...', 10);
+                
+                // 开始轮询任务状态
+                startPolling();
+            })
+            .catch(error => {
+                showError('提交任务时出错: ' + error.message);
+                resetForm();
+            });
+        }
+        
+        function getSelectedOperators(...ids) {
+            return ids
+                .map(id => document.getElementById(id))
+                .filter(checkbox => checkbox && checkbox.checked)
+                .map(checkbox => checkbox.value);
+        }
+        
+        function startPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+            
+            pollingInterval = setInterval(() => {
+                if (!currentTaskId) {
+                    clearInterval(pollingInterval);
+                    return;
+                }
+                
+                fetch(`${API_BASE_URL}/tasks/${currentTaskId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(task => {
+                    updateStatus(task.status, task.progress);
+                    
+                    if (task.status === 'completed') {
+                        clearInterval(pollingInterval);
+                        displayResults(task.result);
+                        resetForm(false);
+                    } else if (task.status === 'failed') {
+                        clearInterval(pollingInterval);
+                        showError(`分析失败: ${task.error}`);
+                        resetForm();
+                    }
+                })
+                .catch(error => {
+                    showError('获取任务状态时出错: ' + error.message);
+                    clearInterval(pollingInterval);
+                    resetForm();
+                });
+            }, 1000); // 每秒轮询一次
+        }
+        
+        function updateStatus(message, progress) {
+            const progressBar = document.getElementById('progress-bar');
+            const statusMessage = document.getElementById('status-message');
+            
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${progress}%`;
+            statusMessage.textContent = message;
+        }
+        
+        function displayResults(result) {
+            if (!result || !result.equations || result.equations.length === 0) {
+                showError('分析未发现任何有效方程');
+                return;
+            }
+            
+            document.getElementById('result-section').style.display = 'block';
+            
+            // 显示最佳方程
+            const bestEquation = result.best_equation;
+            document.getElementById('best-equation-text').textContent = bestEquation.equation;
+            document.getElementById('best-complexity').textContent = bestEquation.complexity;
+            document.getElementById('best-score').textContent = bestEquation.score.toFixed(6);
+            
+            // 显示所有方程
+            const equationList = document.getElementById('equation-list');
+            equationList.innerHTML = '';
+            
+            result.equations.forEach((eq, index) => {
+                const card = document.createElement('div');
+                card.className = 'card equation-card mb-2';
+                
+                card.innerHTML = `
+                    <div class="card-body py-2">
+                        <p class="mb-1"><strong>方程 ${index + 1}:</strong> ${eq.equation}</p>
+                        <p class="mb-0 small">复杂度: ${eq.complexity} | 得分: ${eq.score.toFixed(6)}</p>
+                    </div>
+                `;
+                
+                equationList.appendChild(card);
+            });
+        }
+        
+        function showError(message) {
+            alert(`错误: ${message}`);
+        }
+        
+        function resetForm(resetAll = true) {
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '开始分析';
+            
+            if (resetAll) {
+                document.getElementById('progress-section').style.display = 'none';
+                document.getElementById('result-section').style.display = 'none';
+                currentTaskId = null;
+                
+                if (pollingInterval) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+            }
+        }
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

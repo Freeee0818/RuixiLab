@@ -1,0 +1,93 @@
+# ==================== 环境变量和配置文件 ====================
+.env
+.env.local
+.env.*.local
+*.env
+env.local
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+.venv
+
+# ==================== 日志文件 ====================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==================== 前端构建产物 ====================
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# ==================== 数据和输出文件 ====================
+data/
+outputs/
+pysr_module/output/
+pysr_module/outputs/
+*.pkl
+*.bak
+*.csv
+!src/assets/*.csv
+!public/*.csv
+
+# ==================== 临时文件 ====================
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==================== IDE和编辑器 ====================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ==================== 测试覆盖率 ====================
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# ==================== 其他 ====================
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.db
+*.sqlite
+*.sqlite3

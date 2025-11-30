@@ -1,0 +1,31 @@
+{
+  "name": "physics_center",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@hsorby/vue3-katex": "^0.6.0-rc.7",
+    "axios": "^1.6.2",
+    "echarts": "^5.6.0",
+    "element-plus": "^2.9.9",
+    "katex": "^0.16.9",
+    "markdown-it": "^13.0.2",
+    "markdown-it-katex": "^2.0.3",
+    "pinia": "^2.3.1",
+    "three": "^0.160.0",
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.3",
+    "@vue/compiler-sfc": "^3.4.15",
+    "eslint": "^8.56.0",
+    "eslint-plugin-vue": "^9.21.1",
+    "vite": "^5.0.12"
+  }
+}
