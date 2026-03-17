@@ -23,13 +23,13 @@
     </div>
 
     <div class="footer-section">
-      <p>智析实验数据分析平台</p>
+      <p>睿析实验数据分析平台</p>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import { useRoute } from "vue-router";
 import PySrAnalyzer from "@/components/PySrAnalyzer.vue";
 import PhysicsAssistant from "../components/PhysicsAssistant.vue";
@@ -67,31 +67,7 @@ export default {
       assistantVisible.value = !assistantVisible.value;
     };
 
-    // 页面滚动时调整AI助手位置
-    const handleScroll = () => {
-      const assistantPanel = document.querySelector(".assistant-panel");
-      if (assistantPanel) {
-        const scrollTop =
-          window.pageYOffset || document.documentElement.scrollTop;
-        const headerHeight = 100; // 根据实际情况调整
-
-        if (scrollTop > headerHeight) {
-          assistantPanel.style.top = "20px";
-        } else {
-          assistantPanel.style.top = headerHeight - scrollTop + 20 + "px";
-        }
-      }
-    };
-
-    // 组件挂载时添加滚动监听
-    onMounted(() => {
-      window.addEventListener("scroll", handleScroll);
-    });
-
-    // 组件卸载时移除滚动监听
-    onUnmounted(() => {
-      window.removeEventListener("scroll", handleScroll);
-    });
+    // 使用sticky定位后，面板会自动跟随页面滚动，不需要手动处理滚动事件
 
     const handleProgress = (data) => {
       console.log("分析进度:", data.progress);
@@ -100,8 +76,9 @@ export default {
     const handleCompleted = (result) => {
       console.log("分析完成, 发现方程数量:", result.equations?.length);
       if (result.equations?.length > 0) {
+        // 保存完整的结果对象（包括 equations 和 individual_plots）
         currentRegressionResult.value = JSON.stringify(
-          result.equations,
+          result,
           null,
           2
         );
@@ -141,7 +118,6 @@ export default {
       handleCompleted,
       handleError,
       handleAnalysis,
-      handleScroll,
     };
   },
 };
@@ -171,26 +147,27 @@ export default {
   gap: 24px;
   margin: 20px 0;
   min-height: 600px;
-  align-items: stretch;
+  align-items: flex-start; /* 改为flex-start，让sticky定位生效 */
   position: relative;
-  margin-right: 450px; /* 为右侧固定面板留出空间 */
+  /* 移除margin-right，因为面板现在跟随内容滚动 */
 }
 
 .assistant-panel {
-  /* 修改为随页面滚动的面板 */
-  position: fixed;
-  top: 120px;
-  right: 20px;
+  /* 使用sticky定位，跟随页面内容滚动，但在滚动到顶部时粘在视口顶部 */
+  position: sticky;
+  top: 20px; /* 距离视口顶部的距离 */
   width: 420px;
+  flex-shrink: 0; /* 防止面板被压缩 */
   background: white;
   border-radius: 12px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
   padding: 20px;
   height: fit-content;
   max-height: calc(100vh - 40px);
-  overflow: auto;
-  transition: top 0.3s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
   z-index: 100; /* 确保面板在其他内容之上 */
+  align-self: flex-start; /* 让sticky定位生效 */
 }
 
 /* 当页面滚动时，调整AI助手的位置 */

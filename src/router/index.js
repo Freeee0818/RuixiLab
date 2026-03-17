@@ -1,31 +1,24 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-const routes = [
-  {
-    path: '/',
-    name: 'Cover',
-    component: () => import('../views/CoverView.vue'),
-    meta: {
-      title: '智析实验 - 封面'
-    }
-  },
-  {
-    path: '/analysis',
-    name: 'Analysis',
-    component: () => import('../views/AnalysisView.vue'),
-    meta: {
-      title: '符号回归分析'
-    }
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    redirect: '/'
-  }
-]
-
 const router = createRouter({
-  history: createWebHistory(),
-  routes
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    {
+      path: '/',
+      name: 'cover',
+      component: () => import('@/views/cover/index.vue'),
+    },
+    {
+      path: '/analysis',
+      name: 'analysis',
+      component: () => import('@/views/analysis/index.vue'),
+    },
+    // 兼容旧路由（可选）
+    {
+      path: '/symbolic-regression',
+      redirect: '/analysis',
+    },
+  ],
 })
 
 export default router

@@ -6,8 +6,8 @@ PySR Service Module - 将PySR/Julia功能封装为可以从Web应用调用的服
 """
 
 import os
-import sys
 import json
+import re
 import numpy as np
 import pandas as pd
 import threading
@@ -19,21 +19,9 @@ import base64
 import matplotlib.pyplot as plt
 import logging
 
-# 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# 导入配置
-try:
-    from config import get_config
-    from config.logging_config import setup_logging
-    config = get_config()
-    logger = setup_logging()
-    DEFAULT_OUTPUT_DIR = str(config.OUTPUT_DIR)
-except ImportError:
-    # 如果配置模块不可用，使用默认值
-    logging.basicConfig(level=logging.DEBUG)
-    logger = logging.getLogger(__name__)
-    DEFAULT_OUTPUT_DIR = "output"
+# 配置日志
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def _json_converter(o):
@@ -96,19 +84,16 @@ class SymbolicRegressionTask:
 class PySRService:
     """PySR服务类 - 管理符号回归任务"""
     
-    def __init__(self, output_dir: Optional[str] = None):
+    def __init__(self, output_dir: str = "output"):
         self.tasks = {}  # 存储所有任务
-        self.output_dir = output_dir or DEFAULT_OUTPUT_DIR
+        self.output_dir = output_dir
         self.lock = threading.Lock()  # 用于线程安全操作
         
         # 确保输出目录存在
-        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
         
         # 创建图表保存目录
-        try:
-            self.plots_dir = str(config.PLOTS_DIR) if 'config' in sys.modules else os.path.join(self.output_dir, "plots")
-        except:
-            self.plots_dir = os.path.join(self.output_dir, "plots")
+        self.plots_dir = os.path.join(output_dir, "plots")
         os.makedirs(self.plots_dir, exist_ok=True)
     
     def create_task(self, file_path: str, parameters: Dict[str, Any]) -> str:
@@ -265,7 +250,7 @@ class PySRService:
         }
         
         # PySRRegressor 不接受的参数（这些参数用于前端选择算法，但不传递给PySR）
-        excluded_params = {'algorithm', 'complexity_of_operators'}
+        excluded_params = {'algorithm', 'complexity_of_operators', 'variable_mapping'}
         
         # 更新用户提供的参数
         if params:
@@ -291,9 +276,16 @@ class PySRService:
     def _generate_results(self, model, X: np.ndarray, y: np.ndarray, task_id: str) -> Dict[str, Any]:
         """生成分析结果，包括方程列表和图表"""
         try:
-            # 创建任务专用的图表目录
-            task_plots_dir = os.path.join(self.plots_dir, task_id)
-            os.makedirs(task_plots_dir, exist_ok=True)
+            # #region agent log
+            import json
+            start_time = time.time()
+            with open(r'f:\桌面\Freee\GuideLab\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"location":"pysr_service.py:276","message":"开始生成结果","data":{"task_id":task_id,"num_equations":len(model.equations_)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"performance-test","hypothesisId":"H1"}) + '\n')
+            # #endregion
+            
+            # 获取任务参数中的变量映射
+            task = self.tasks.get(task_id)
+            variable_mapping = task.parameters.get('variable_mapping', {}) if task and task.parameters else {}
             
             # 初始化结果字典
             result = {
@@ -304,38 +296,88 @@ class PySRService:
             }
             
             # 生成复杂度vs得分图
-            complexity_plot = self._create_complexity_vs_score_plot(model, task_plots_dir)
+            # #region agent log
+            plot_start = time.time()
+            # #endregion
+            complexity_plot = self._create_complexity_vs_score_plot(model)
             result["complexity_plot"] = complexity_plot
+            # #region agent log
+            with open(r'f:\桌面\Freee\GuideLab\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"location":"pysr_service.py:296","message":"复杂度图生成完成","data":{"time_ms":int((time.time()-plot_start)*1000),"size_kb":len(complexity_plot)/1024},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"performance-test","hypothesisId":"H2"}) + '\n')
+            # #endregion
             
             # 获取所有方程
             sorted_eqs = model.equations_.sort_values('score', ascending=False)
             
             # 生成所有方程的拟合图
-            fitting_plot, individual_plots = self._create_fitting_plots(model, X, y, sorted_eqs, task_plots_dir)
+            # #region agent log
+            fit_start = time.time()
+            # #endregion
+            fitting_plot, individual_plots = self._create_fitting_plots(model, X, y, sorted_eqs, variable_mapping)
             result["fitting_plot"] = fitting_plot
             result["individual_plots"] = individual_plots
+            # #region agent log
+            with open(r'f:\桌面\Freee\GuideLab\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"location":"pysr_service.py:303","message":"拟合图生成完成","data":{"time_ms":int((time.time()-fit_start)*1000),"num_individual_plots":len(individual_plots),"total_size_kb":sum(len(p['plot'])/1024 for p in individual_plots)+len(fitting_plot)/1024},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"performance-test","hypothesisId":"H3"}) + '\n')
+            # #endregion
+            
+            # 获取 y 变量名
+            y_name = variable_mapping.get('y_variable', {}).get('name', 'y') if variable_mapping else 'y'
             
             # 处理所有方程
             for i, (_, eq) in enumerate(sorted_eqs.iterrows()):
+                replaced_equation = self._replace_variable_names(eq['equation'], variable_mapping)
                 equation_data = {
-                    'equation': eq['equation'],
+                    'equation': f"{y_name} = {replaced_equation}",  # 添加 y = 
                     'complexity': int(eq['complexity']),
                     'score': float(eq['score']),
                     'loss': float(eq['loss']),
                     'is_best': i == 0  # 标记得分最高的方程
                 }
-                
+
                 result["equations"].append(equation_data)
+            
+            # #region agent log
+            total_time = time.time() - start_time
+            with open(r'f:\桌面\Freee\GuideLab\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"location":"pysr_service.py:322","message":"结果生成完成","data":{"total_time_ms":int(total_time*1000),"num_equations":len(result["equations"]),"num_plots":len(individual_plots)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"performance-test","hypothesisId":"H4"}) + '\n')
+            # #endregion
             
             return result
         except Exception as e:
             logger.error(f"生成结果时出错: {str(e)}", exc_info=True)
             raise
-    
-    def _create_complexity_vs_score_plot(self, model, plots_dir: str) -> str:
+
+    def _replace_variable_names(self, equation: str, variable_mapping: Dict[str, Any]) -> str:
+        """将方程中的 PySR 默认变量名替换为用户定义的变量名"""
+        if not variable_mapping:
+            return equation
+
+        # 创建变量名映射字典
+        x_variables = variable_mapping.get('x_variables', [])
+        replacement_map = {}
+
+        # 为每个 x 变量创建映射
+        for var_info in x_variables:
+            pysr_name = var_info.get('pysr_name', f"x{var_info.get('index', 0)}")
+            user_name = var_info.get('name', pysr_name)
+            replacement_map[pysr_name] = user_name
+
+        # 替换方程中的变量名
+        result = equation
+        for pysr_var, user_var in replacement_map.items():
+            # 使用正则表达式确保只替换变量名，不替换其他包含该字符串的部分
+            # 匹配变量名（前面不是字母或数字，后面也不是字母或数字）
+            pattern = r'(?<!\w)' + re.escape(pysr_var) + r'(?!\w)'
+            result = re.sub(pattern, user_var, result)
+
+        return result
+
+    def _create_complexity_vs_score_plot(self, model) -> str:
         """创建复杂度-得分折线图并返回base64编码"""
         try:
-            plt.figure(figsize=(12, 8))
+            # 优化：进一步缩小尺寸，降低DPI，只保存到内存
+            plt.figure(figsize=(6, 4))  # 从 8x5 进一步缩小到 6x4
 
             # 根据复杂度排序
             sorted_eq = model.equations_.sort_values('complexity').reset_index(drop=True)
@@ -364,13 +406,9 @@ class PySRService:
             ax.grid(True, linestyle='--', alpha=0.7)
             plt.tight_layout()
 
-            # 保存图片到文件（保持原文件名以兼容前端）
-            complexity_plot_path = os.path.join(plots_dir, 'complexity_vs_score.png')
-            plt.savefig(complexity_plot_path, format='png', dpi=300, bbox_inches='tight')
-
-            # 转base64
+            # 只保存到内存（不保存到磁盘），降低DPI，进一步优化
             buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+            plt.savefig(buf, format='png', dpi=80, bbox_inches='tight')  # DPI从100降到80
             buf.seek(0)
             complexity_plot = base64.b64encode(buf.getvalue()).decode()
             plt.close()
@@ -380,9 +418,16 @@ class PySRService:
             logger.error(f"创建复杂度-得分图时出错: {str(e)}", exc_info=True)
             raise
     
-    def _create_fitting_plots(self, model, X: np.ndarray, y: np.ndarray, sorted_eqs, plots_dir: str) -> Tuple[str, List[Dict]]:
-        """创建拟合图并返回base64编码和单个方程的图"""
+    def _create_fitting_plots(self, model, X: np.ndarray, y: np.ndarray, sorted_eqs, variable_mapping: Dict[str, Any] = None) -> Tuple[str, List[Dict]]:
+        """创建拟合图并返回base64编码和单个方程的图（优化版：降低DPI，限制数量，不保存磁盘）"""
         try:
+            # 获取变量名
+            if variable_mapping:
+                x_variables = variable_mapping.get('x_variables', [])
+                y_name = variable_mapping.get('y_variable', {}).get('name', 'Y')
+            else:
+                x_variables = []
+                y_name = 'Y'
             # 如果是多维X：
             # 1) 生成 Y 对每个 Xi 的组合散点图，作为整体 fitting_plot
             # 2) 为每个方程生成 y vs y_pred 的散点图，填充 individual_plots，供前端点击展示
@@ -391,29 +436,32 @@ class PySRService:
                 cols = min(3, num_features)
                 rows = int(np.ceil(num_features / cols))
 
-                plt.figure(figsize=(5 * cols + 2, 4 * rows + 1))
+                # 优化：进一步缩小尺寸
+                plt.figure(figsize=(3 * cols + 1, 2.5 * rows + 1))
                 plt.style.use('seaborn-v0_8-whitegrid')
 
                 for i in range(num_features):
                     ax = plt.subplot(rows, cols, i + 1)
                     ax.scatter(X[:, i], y, c='gray', alpha=0.6, s=20)
-                    ax.set_xlabel(f'X{i + 1}')
-                    ax.set_ylabel('Y')
-                    ax.set_title(f'Y vs X{i + 1}')
+                    # 使用用户定义的变量名
+                    x_name = x_variables[i].get('name', f'X{i + 1}') if i < len(x_variables) else f'X{i + 1}'
+                    ax.set_xlabel(x_name)
+                    ax.set_ylabel(y_name)
+                    ax.set_title(f'{y_name} vs {x_name}')
                     ax.grid(True, linestyle='--', alpha=0.5)
 
                 plt.tight_layout()
 
-                # 保存到base64作为总体拟合图
+                # 只保存到内存，降低DPI，进一步优化
                 buf = io.BytesIO()
-                plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+                plt.savefig(buf, format='png', dpi=80, bbox_inches='tight')  # DPI从100降到80
                 buf.seek(0)
                 overall_plot_base64 = base64.b64encode(buf.getvalue()).decode()
                 plt.close()
 
-                # 逐方程生成 y vs y_pred 图
+                # 逐方程生成 y vs y_pred 图（生成所有方程）
                 individual_plots = []
-                for i, (_, eq) in enumerate(sorted_eqs.iterrows()):
+                for i, (_, eq) in enumerate(sorted_eqs.iterrows()):  # 生成所有方程
                     try:
                         eq_str = eq['equation']
                         # 将运算函数映射到numpy
@@ -436,30 +484,33 @@ class PySRService:
                         if y_pred is None or len(y_pred) != len(y):
                             continue
 
-                        # 绘制 y vs y_pred
-                        plt.figure(figsize=(6, 5))
+                        # 替换变量名并构建方程信息
+                        replaced_eq = self._replace_variable_names(eq['equation'], variable_mapping)
+                        eq_info = (
+                            f"Equation: {y_name} = {replaced_eq}\n"
+                            f"Complexity: {eq['complexity']}\n"
+                            f"LOSS: {eq['loss']:.6f} | Score: {eq['score']:.6f}"
+                        )
+
+                        # 绘制 y vs y_pred（进一步优化尺寸）
+                        plt.figure(figsize=(4, 3))  # 从5x4进一步缩小到4x3
                         plt.style.use('seaborn-v0_8-whitegrid')
                         plt.scatter(y, y_pred, c='tab:blue', alpha=0.6, s=16, label='Predicted vs True')
                         # y=x 参考线
                         y_min = np.nanmin([np.min(y), np.min(y_pred)])
                         y_max = np.nanmax([np.max(y), np.max(y_pred)])
                         plt.plot([y_min, y_max], [y_min, y_max], 'r--', linewidth=1.5, label='y = x')
-                        plt.xlabel('True Y')
-                        plt.ylabel('Predicted Y')
-                        plt.title(f'Model {i+1}: y vs y_pred')
+                        plt.xlabel(f'True {y_name}')
+                        plt.ylabel(f'Predicted {y_name}')
+                        plt.title(f'Model {i+1}: {y_name} vs {y_name}_pred')
                         plt.legend(loc='best', fontsize=9)
-                        # 在图内添加方程与指标信息，便于前端直接查看/下载
-                        eq_info = (
-                            f"Equation: {eq['equation']}\n"
-                            f"Complexity: {eq['complexity']}\n"
-                            f"LOSS: {eq['loss']:.6f} | Score: {eq['score']:.6f}"
-                        )
                         plt.figtext(0.02, 0.02, eq_info, fontsize=9,
                                     bbox=dict(facecolor='white', alpha=0.85, boxstyle='round,pad=0.4'))
                         plt.tight_layout()
 
+                        # 只保存到内存，降低DPI
                         buf = io.BytesIO()
-                        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+                        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')  # DPI从300降到100
                         buf.seek(0)
                         indiv_plot_b64 = base64.b64encode(buf.getvalue()).decode()
                         plt.close()
@@ -479,8 +530,11 @@ class PySRService:
             # 存储所有单独方程的图表
             individual_plots = []
             
-            # 创建所有方程的拟合图
-            plt.figure(figsize=(14, 10))
+            # 获取变量名（单维情况）
+            x_name = x_variables[0].get('name', 'X') if len(x_variables) > 0 else 'X'
+            
+            # 创建所有方程的拟合图（进一步优化尺寸）
+            plt.figure(figsize=(8, 6))  # 从10x7进一步缩小到8x6
             plt.style.use('seaborn-v0_8-whitegrid')
             
             # 绘制原始数据点
@@ -490,12 +544,12 @@ class PySRService:
             x_range = X.max() - X.min()
             x_padding = x_range * 0.05
             
-            # 颜色列表，需要更多颜色来处理所有方程
+            # 颜色列表
             colors = ['red', 'blue', 'green', 'purple', 'orange', 'darkred', 'darkblue', 
                      'darkgreen', 'darkviolet', 'darkorange', 'cornflowerblue', 'olive',
                      'teal', 'salmon', 'skyblue', 'yellowgreen', 'plum', 'chocolate']
             
-            # 处理所有方程，不限制数量
+            # 处理所有方程（在组合图中显示全部，但单独图只生成前N个）
             for i, (_, eq) in enumerate(sorted_eqs.iterrows()):
                 try:
                     # 处理方程字符串
@@ -530,53 +584,54 @@ class PySRService:
                         # 确定颜色索引，循环使用颜色
                         color_idx = i % len(colors)
                         
+                        # 替换变量名
+                        replaced_eq = self._replace_variable_names(eq['equation'], variable_mapping)
+                        
                         # 添加到组合图
                         plt.plot(X_smooth[valid_idx], y_pred[valid_idx], color=colors[color_idx], linewidth=2.5, 
-                                label=f'Model {i+1}: {eq["equation"]}', alpha=0.85)
+                                label=f'Model {i+1}: {y_name} = {replaced_eq}', alpha=0.85)
                         
-                        # 创建单独的方程拟合图
-                        plt.figure(figsize=(14, 9))
-                        plt.style.use('seaborn-v0_8-whitegrid')
-                        plt.scatter(X, y, c='gray', alpha=0.5, label='Original Data')
-                        plt.plot(X_smooth[valid_idx], y_pred[valid_idx], color=colors[color_idx], linewidth=3.5, 
-                                label=f'Model {i+1}: {eq["equation"]}')
-                        
-                        # 添加方程详细信息（改为展示 LOSS）
-                        eq_info = (
-                            f"Equation: {eq['equation']}\n"
-                            f"Complexity: {eq['complexity']}\n"
-                            f"LOSS: {eq['loss']:.6f}"
-                        )
-                        plt.figtext(0.02, 0.02, eq_info, fontsize=12, 
-                                   bbox=dict(facecolor='white', alpha=0.85, boxstyle='round,pad=0.5'))
-                        
-                        plt.xlabel('X', fontsize=12)
-                        plt.ylabel('Y', fontsize=12)
-                        plt.title(f'Model {i+1} Fit', fontsize=14, fontweight='bold')
-                        plt.legend(loc='best', fontsize=12)
-                        plt.grid(True, linestyle='--', alpha=0.7)
-                        plt.tight_layout()
-                        
-                        # 保存单独的方程图
-                        indiv_plot_path = os.path.join(plots_dir, f'model_{i+1}_fit.png')
-                        plt.savefig(indiv_plot_path, format='png', dpi=300, bbox_inches='tight')
-                        
-                        # 将图片转换为base64编码
-                        buf = io.BytesIO()
-                        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
-                        buf.seek(0)
-                        
-                        # 添加到单独方程图列表
-                        individual_plots.append({
-                            'model_index': i+1,
-                            'equation': eq['equation'],
-                            'complexity': int(eq['complexity']),
-                            'score': float(eq['score']),
-                            'loss': float(eq['loss']),
-                            'plot': base64.b64encode(buf.getvalue()).decode()
-                        })
-                        
-                        plt.close()
+                        # 为所有方程创建单独图
+                        if True:  # 生成所有方程的单独图
+                            # 创建单独的方程拟合图（进一步优化尺寸）
+                            plt.figure(figsize=(6, 5))  # 从8x6进一步缩小到6x5
+                            plt.style.use('seaborn-v0_8-whitegrid')
+                            plt.scatter(X, y, c='gray', alpha=0.5, label='Original Data')
+                            plt.plot(X_smooth[valid_idx], y_pred[valid_idx], color=colors[color_idx], linewidth=3.5, 
+                                    label=f'Model {i+1}: {y_name} = {replaced_eq}')
+                            
+                            # 添加方程详细信息
+                            eq_info = (
+                                f"Equation: {y_name} = {replaced_eq}\n"
+                                f"Complexity: {eq['complexity']}\n"
+                                f"LOSS: {eq['loss']:.6f}"
+                            )
+                            plt.figtext(0.02, 0.02, eq_info, fontsize=10, 
+                                       bbox=dict(facecolor='white', alpha=0.85, boxstyle='round,pad=0.5'))
+                            
+                            plt.xlabel(x_name, fontsize=11)
+                            plt.ylabel(y_name, fontsize=11)
+                            plt.title(f'Model {i+1}: {y_name} vs {x_name}', fontsize=12, fontweight='bold')
+                            plt.legend(loc='best', fontsize=10)
+                            plt.grid(True, linestyle='--', alpha=0.7)
+                            plt.tight_layout()
+                            
+                            # 只保存到内存，降低DPI（不保存到磁盘）
+                            buf = io.BytesIO()
+                            plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')  # DPI从300降到100
+                            buf.seek(0)
+                            
+                            # 添加到单独方程图列表
+                            individual_plots.append({
+                                'model_index': i+1,
+                                'equation': eq['equation'],
+                                'complexity': int(eq['complexity']),
+                                'score': float(eq['score']),
+                                'loss': float(eq['loss']),
+                                'plot': base64.b64encode(buf.getvalue()).decode()
+                            })
+                            
+                            plt.close()
                         
                     else:
                         logger.warning(f"方程 {eq['equation']} 没有有效的预测值")
@@ -616,34 +671,32 @@ class PySRService:
                     
                     valid_idx = ~np.isnan(y_pred)
                     if np.sum(valid_idx) > 0:
+                        # 替换变量名
+                        replaced_eq = self._replace_variable_names(eq['equation'], variable_mapping)
                         color_idx = i % len(colors)
                         plt.plot(X_smooth[valid_idx], y_pred[valid_idx], color=colors[color_idx], linewidth=2.5, 
-                                label=f'Model {i+1}: {eq["equation"]}', alpha=0.85)
+                                label=f'Model {i+1}: {y_name} = {replaced_eq}', alpha=0.85)
                 except Exception as e:
                     continue
             
             # 完成组合图设置
-            plt.xlabel('X', fontsize=12)
-            plt.ylabel('Y', fontsize=12)
-            plt.title('All Fitting Results', fontsize=14, fontweight='bold')
+            plt.xlabel(x_name, fontsize=12)
+            plt.ylabel(y_name, fontsize=12)
+            plt.title(f'All Fitting Results: {y_name} vs {x_name}', fontsize=14, fontweight='bold')
             
             # 如果方程很多，将图例放在右侧
             if len(sorted_eqs) > 5:
-                plt.legend(loc='best', fontsize=10, bbox_to_anchor=(1.02, 1))
+                plt.legend(loc='best', fontsize=9, bbox_to_anchor=(1.02, 1))
                 plt.subplots_adjust(right=0.7)  # 为图例留出空间
             else:
-                plt.legend(loc='best', fontsize=11)
+                plt.legend(loc='best', fontsize=10)
                 
             plt.grid(True, linestyle='--', alpha=0.7)
             plt.tight_layout()
             
-            # 保存组合拟合图
-            fitting_plot_path = os.path.join(plots_dir, 'all_fitting_results.png')
-            plt.savefig(fitting_plot_path, format='png', dpi=300, bbox_inches='tight')
-            
-            # 将图片转换为base64编码
+            # 只保存到内存，降低DPI，进一步优化（不保存到磁盘）
             buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+            plt.savefig(buf, format='png', dpi=80, bbox_inches='tight')  # DPI从100降到80
             buf.seek(0)
             all_fitting_plot = base64.b64encode(buf.getvalue()).decode()
             
@@ -712,7 +765,7 @@ if __name__ == "__main__":
     app = Flask(__name__)
     CORS(app)  # 允许跨域请求
     
-    @app.route('/api/symbolic-regression', methods=['POST'])
+    @app.route('/symbolic-regression', methods=['POST'])
     def handle_regression():
         try:
             # 获取上传的文件
@@ -751,7 +804,7 @@ if __name__ == "__main__":
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
     
-    @app.route('/api/task-status/<task_id>', methods=['GET'])
+    @app.route('/task-status/<task_id>', methods=['GET'])
     def handle_task_status(task_id):
         try:
             result = get_task_status(task_id)
@@ -761,7 +814,7 @@ if __name__ == "__main__":
             body = json.dumps({'success': False, 'error': str(e)}, ensure_ascii=False)
             return Response(body, status=500, mimetype='application/json')
     
-    @app.route('/api/task-start/<task_id>', methods=['POST'])
+    @app.route('/task-start/<task_id>', methods=['POST'])
     def handle_start_task(task_id):
         try:
             result = start_regression_task(task_id)
@@ -771,7 +824,7 @@ if __name__ == "__main__":
             body = json.dumps({'success': False, 'error': str(e)}, ensure_ascii=False)
             return Response(body, status=500, mimetype='application/json')
     
-    @app.route('/api/tasks', methods=['GET'])
+    @app.route('/tasks', methods=['GET'])
     def handle_list_tasks():
         try:
             result = list_all_tasks()

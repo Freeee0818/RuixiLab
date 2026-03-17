@@ -17,17 +17,8 @@ export default defineConfig(({ mode }) => {
     'process.env': {}
   },
   server: {
-    proxy: {
-      '/api': {
-          target: env.VITE_API_BASE_URL_1 || 'http://localhost:8000',
-        changeOrigin: true
-      },
-      '/data-analysis': {
-          target: env.VITE_API_BASE_URL_2 || 'http://localhost:8001',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/data-analysis/, '/api')
-        }
-      }
-    }
+    // 不使用代理，直接从前端调用后端API
+    // 后端已配置CORS，可以直接跨域请求
+  }
   }
 })

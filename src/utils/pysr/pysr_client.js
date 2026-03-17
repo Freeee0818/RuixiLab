@@ -1,22 +1,26 @@
 /**
  * PySR服务客户端 - 用于从现有Web应用调用PySR服务
+ * 
+ * 🆕 新版本使用统一的API模块
+ * 
+ * 此类现在是新API模块的适配器，保持向后兼容
+ * 推荐直接使用：import { pysrAPI } from '@/utils/api'
  */
-import { API_BASE_URL_1, getApiUrl } from '@/utils/api'
+import { pysrAPI } from '@/utils/api'
 
 class PySRClient {
     /**
      * 初始化PySR客户端
-     * @param {string} apiBaseUrl - PySR服务的基础URL
+     * @param {string} apiBaseUrl - PySR服务的基础URL（此参数已废弃，使用环境变量配置）
      * @param {object} options - 附加选项
      */
-    constructor(apiBaseUrl = API_BASE_URL_1, options = {}) {
-        this.apiBaseUrl = apiBaseUrl.replace(/\/+$/, '')  // 移除末尾的斜杠
+    constructor(apiBaseUrl, options = {}) {
         this.options = options
+        // 注意：apiBaseUrl参数已废弃，现在通过环境变量配置
+        if (apiBaseUrl) {
+            console.warn('[PySRClient] apiBaseUrl参数已废弃，请通过环境变量VITE_PYSR_API_URL配置服务地址')
+        }
     }
-    // constructor(apiBaseUrl = 'http://localhost:8000/api', options = {}) {
-    //   this.apiBaseUrl = apiBaseUrl;
-    //   this.options = options;
-    // }
   
     /**
      * 提交符号回归分析任务
@@ -25,21 +29,7 @@ class PySRClient {
      * @returns {Promise<string>} 返回任务ID
      */
     async submitTask(dataFile, parameters = {}) {
-        const formData = new FormData()
-        formData.append('file', dataFile)
-        formData.append('params', JSON.stringify(parameters))
-
-        // 直接使用完整的API路径
-        const response = await fetch(`${this.apiBaseUrl}/api/tasks`, {
-            method: 'POST',
-            body: formData
-        })
-
-        if (!response.ok) {
-            throw new Error(`Failed to submit task: ${response.statusText}`)
-        }
-
-        const result = await response.json()
+        const result = await pysrAPI.submitTask(dataFile, parameters)
         return result.task_id
     }
   
@@ -49,13 +39,7 @@ class PySRClient {
      * @returns {Promise} - 返回任务状态
      */
     async getTaskStatus(taskId) {
-        const response = await fetch(`${this.apiBaseUrl}/api/tasks/${taskId}`)
-        
-        if (!response.ok) {
-            throw new Error(`Failed to get task status: ${response.statusText}`)
-        }
-
-        return response.json()
+        return pysrAPI.getTaskStatus(taskId)
     }
   
     /**
@@ -63,20 +47,8 @@ class PySRClient {
      * @returns {Promise<Array>} 任务列表
      */
     async listAllTasks() {
-        try {
-            const response = await fetch(`${this.apiBaseUrl}/api/tasks`)
-            
-            if (!response.ok) {
-                const errorData = await response.json()
-                throw new Error(`API错误: ${errorData.detail || response.statusText}`)
-            }
-
-            const data = await response.json()
-            return data.tasks
-        } catch (error) {
-            console.error('获取任务列表时出错:', error)
-            throw error
-        }
+        const result = await pysrAPI.listTasks()
+        return result.tasks
     }
   
     /**
@@ -98,11 +70,11 @@ class PySRClient {
       // 基于任务状态计算进度百分比
       const calculateProgress = (status, statusMessage) => {
         if (status === 'queued') return 10;
-        if (status === 'processing') {
-          if (statusMessage.includes('处理数据')) return 20;
-          if (statusMessage.includes('初始化')) return 30;
-          if (statusMessage.includes('运行')) return 50;
-          if (statusMessage.includes('生成图表')) return 70;
+        if (status === 'processing' || status === 'running') {
+          if (statusMessage?.includes('处理数据')) return 20;
+          if (statusMessage?.includes('初始化')) return 30;
+          if (statusMessage?.includes('运行')) return 50;
+          if (statusMessage?.includes('生成图表')) return 70;
           return 50;
         }
         if (status === 'completed') return 100;

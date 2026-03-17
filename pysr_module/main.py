@@ -7,31 +7,11 @@ PySR Web服务 - 主入口
 """
 
 import os
-import sys
 import argparse
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-
-# 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# 加载环境变量
-from dotenv import load_dotenv
-from pathlib import Path
-project_root = Path(__file__).parent.parent
-env_path = project_root / ".env"
-if env_path.exists():
-    load_dotenv(env_path)
-
-# 导入配置
-from config import get_config
-from config.logging_config import setup_logging
-
-# 设置日志
-logger = setup_logging()
-config = get_config()
 
 # 导入API路由
 from api import app as api_app
@@ -46,14 +26,13 @@ app = FastAPI(
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.CORS_ORIGINS if config.CORS_ORIGINS else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 将API应用挂载到根路径和/api路径
-app.mount("/api", api_app)
+# 将API应用挂载到根路径
 app.mount("/", api_app)
 
 # 获取静态文件目录
@@ -66,23 +45,17 @@ if os.path.exists(static_dir):
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="PySR Web Service")
-    parser.add_argument("--host", type=str, default=config.API_HOST, help="Host to run the service on")
-    parser.add_argument("--port", type=int, default=config.API_PORT, help="Port to run the service on")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to run the service on")
+    parser.add_argument("--port", type=int, default=8000, help="Port to run the service on")
     args = parser.parse_args()
     
-    logger.info(f"Starting PySR Web Service on http://{args.host}:{args.port}")
-    logger.info("API endpoints available at:")
-    logger.info(f"  - http://{args.host}:{args.port}/api")
-    logger.info(f"  - http://{args.host}:{args.port}/")
-    print(f"\n{'='*60}")
-    print(f"智析实验平台 - PySR服务")
-    print(f"{'='*60}")
-    print(f"服务地址: http://{args.host}:{args.port}")
-    print(f"环境: {os.getenv('ENVIRONMENT', 'development')}")
-    print(f"按 Ctrl+C 停止服务\n")
+    print(f"Starting PySR Web Service on http://{args.host}:{args.port}")
+    print("API endpoints available at:")
+    print(f"  - http://{args.host}:{args.port}/")
+    print("Press Ctrl+C to stop the server")
     
     # 启动服务
-    uvicorn.run(app, host=args.host, port=args.port, log_config=None)
+    uvicorn.run(app, host=args.host, port=args.port)
 
 if __name__ == "__main__":
     main() 

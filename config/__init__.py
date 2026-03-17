@@ -1,5 +1,14 @@
-"""配置模块"""
-from .config import Config, get_config, DevelopmentConfig, ProductionConfig, TestingConfig
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-__all__ = ["Config", "get_config", "DevelopmentConfig", "ProductionConfig", "TestingConfig"]
+"""
+配置模块
+统一管理应用配置
+"""
 
+from .settings import settings
+
+__all__ = ["settings"]
+
+# 初始化：确保必需的目录存在
+settings.ensure_directories()

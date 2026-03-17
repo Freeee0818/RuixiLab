@@ -25,7 +25,7 @@ def main():
     project_root = Path(__file__).parent.parent
     
     print("=" * 60)
-    print("智析实验平台 - 项目初始化")
+    print("睿析实验平台 - 项目初始化")
     print("=" * 60)
     
     # 1. 检查Python版本

@@ -1,8 +1,14 @@
 <script setup>
+import AppHeader from './components/AppHeader.vue'
 </script>
 
 <template>
-  <router-view />
+  <div class="app-wrapper">
+    <AppHeader />
+    <main class="app-main">
+      <router-view />
+    </main>
+  </div>
 </template>
 
 <style>
@@ -13,5 +19,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #2c3e50;
+}
+
+.app-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  padding-top: 85px; /* 导航栏高度 */
 }
 </style>

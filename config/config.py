@@ -24,7 +24,7 @@ class Config:
     """基础配置类"""
     
     # 项目信息
-    PROJECT_NAME = "智析实验平台"
+    PROJECT_NAME = "睿析实验平台"
     VERSION = "1.0.0"
     
     # 日志配置
