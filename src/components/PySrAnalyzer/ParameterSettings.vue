@@ -123,25 +123,6 @@
             <span class="card-subtitle">灵活控制模型可使用的符号与复杂度</span>
           </div>
           <div class="operators-section">
-            <!-- 二元运算符 -->
-            <div class="operators-group">
-              <h5>二元运算符</h5>
-              <div class="checkboxes">
-                <label>
-                  <input type="checkbox" v-model="binary_add" :disabled="disabled"> 加法 (+)
-                </label>
-                <label>
-                  <input type="checkbox" v-model="binary_subtract" :disabled="disabled"> 减法 (-)
-                </label>
-                <label>
-                  <input type="checkbox" v-model="binary_multiply" :disabled="disabled"> 乘法 (*)
-                </label>
-                <label>
-                  <input type="checkbox" v-model="binary_divide" :disabled="disabled"> 除法 (/)
-                </label>
-              </div>
-            </div>
-            
             <!-- 一元运算符 -->
             <div class="operators-group">
               <h5>一元运算符</h5>
@@ -320,10 +301,6 @@ export default {
   setup() {
     const {
       formulaAlgorithm,
-      binary_add,
-      binary_subtract,
-      binary_multiply,
-      binary_divide,
       unaryOperators,
       pysrParameters,
       neuralParameters,
@@ -340,10 +317,6 @@ export default {
       formulaAlgorithm,
       
       // 运算符
-      binary_add,
-      binary_subtract,
-      binary_multiply,
-      binary_divide,
       unaryOperators,
       
       // 参数

@@ -11,6 +11,7 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
   const currentInput = ref('')
   const isLoading = ref(false)
   const streamingMessage = ref('')
+  const streamingThinking = ref('')   // 流式阶段的思考内容（与正文分离）
   const isStreaming = ref(false)
   
   // 当前模型配置
@@ -51,6 +52,7 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
     isLoading.value = true
     isStreaming.value = true
     streamingMessage.value = ''
+    streamingThinking.value = ''
     
     try {
       // 构建请求消息
@@ -66,10 +68,11 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
       // 调用流式API
       await streamChatCompletion(requestMessages, config, plotImage)
       
-      // 添加完整的助手消息
+      // 添加完整的助手消息（思考内容单独存储）
       messages.value.push({
         role: 'assistant',
         content: streamingMessage.value,
+        thinking: streamingThinking.value || null,
         timestamp: new Date().toLocaleTimeString()
       })
     } catch (error) {
@@ -87,6 +90,7 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
       isLoading.value = false
       isStreaming.value = false
       streamingMessage.value = ''
+      streamingThinking.value = ''
     }
   }
   
@@ -171,10 +175,15 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
           
           try {
             const parsed = JSON.parse(data)
-            // 兼容后端返回的格式 {content: "..."} 或 OpenAI 格式
-            const content = parsed.content || parsed.choices?.[0]?.delta?.content
-            if (content) {
-              streamingMessage.value += content
+            // 深度思考模式：思考内容单独累积，不混入正文
+            if (parsed.type === 'thinking' && parsed.content) {
+              streamingThinking.value += parsed.content
+            } else {
+              // 兼容后端返回的格式 {content: "..."} 或 OpenAI 格式
+              const content = parsed.content || parsed.choices?.[0]?.delta?.content
+              if (content) {
+                streamingMessage.value += content
+              }
             }
             // 处理错误类型的消息
             if (parsed.type === 'error') {
@@ -218,6 +227,7 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
     currentInput,
     isLoading,
     streamingMessage,
+    streamingThinking,
     isStreaming,
     hasMessages,
     sendMessage,

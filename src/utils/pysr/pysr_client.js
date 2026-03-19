@@ -68,12 +68,17 @@ class PySRClient {
       interval = 2000
     ) {
       // 基于任务状态计算进度百分比
-      const calculateProgress = (status, statusMessage) => {
-        if (status === 'queued') return 10;
+      const calculateProgress = (status, statusMessage, queuePosition) => {
+        // 排队中的任务显示较低的进度
+        if (status === 'queued') {
+          // 根据队列位置计算进度（5-10%之间）
+          const queueProgress = Math.max(5, 10 - (queuePosition || 0));
+          return queueProgress;
+        }
         if (status === 'processing' || status === 'running') {
           if (statusMessage?.includes('处理数据')) return 20;
           if (statusMessage?.includes('初始化')) return 30;
-          if (statusMessage?.includes('运行')) return 50;
+          if (statusMessage?.includes('运行') || statusMessage?.includes('拟合')) return 50;
           if (statusMessage?.includes('生成图表')) return 70;
           return 50;
         }
@@ -86,8 +91,12 @@ class PySRClient {
         try {
           const taskInfo = await this.getTaskStatus(taskId);
           
-          // 计算进度
-          const progress = calculateProgress(taskInfo.status, taskInfo.status_message || '');
+          // 计算进度（包含队列位置信息）
+          const progress = calculateProgress(
+            taskInfo.status, 
+            taskInfo.status_message || '',
+            taskInfo.queue_position
+          );
           
           // 调用进度回调
           progressCallback(taskInfo, progress);

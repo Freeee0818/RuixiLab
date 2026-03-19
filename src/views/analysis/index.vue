@@ -7,10 +7,6 @@
       @completed="handleCompleted"
       @error="handleError"
     />
-    
-    <div class="footer-section">
-      <p>睿析实验数据分析平台</p>
-    </div>
   </div>
 </template>
 
@@ -64,15 +60,6 @@ export default {
   padding: 0 8px 20px 8px;
   font-family: 'Helvetica Neue', Arial, sans-serif;
   position: relative;
-}
-
-.footer-section {
-  margin-top: 40px;
-  text-align: center;
-  color: #7f8c8d;
-  font-size: 14px;
-  padding-top: 20px;
-  border-top: 1px solid #eaeaea;
 }
 </style>
 

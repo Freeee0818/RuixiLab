@@ -13,6 +13,15 @@
           <button class="btn-primary" @click="handleStartAnalysis">
             开始分析
           </button>
+          <button class="btn-secondary" @click="handleDataCollection">
+            数据采集
+          </button>
+          <button class="btn-secondary" @click="handleVirtualLab">
+            虚拟实验
+          </button>
+          <button class="btn-secondary" @click="handleSmartCourse">
+            智慧课程
+          </button>
           <button class="btn-secondary" @click="scrollToFeatures">
             了解更多
           </button>
@@ -40,6 +49,7 @@
 
 <script>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
 export default {
   name: 'HeroSection',
@@ -47,11 +57,24 @@ export default {
   emits: ['start-analysis'],
   
   setup(props, { emit }) {
+    const router = useRouter()
     const videoPlayer = ref(null)
     const videoSrc = ref('/videos/promo.mp4')
     
     const handleStartAnalysis = () => {
       emit('start-analysis')
+    }
+    
+    const handleDataCollection = () => {
+      router.push('/data-collection')
+    }
+    
+    const handleVirtualLab = () => {
+      window.open('http://10.161.25.80:8000', '_blank')
+    }
+    
+    const handleSmartCourse = () => {
+      window.open('http://t.zhihuishu.com/NaXDze0e', '_blank')
     }
     
     const scrollToFeatures = () => {
@@ -80,6 +103,9 @@ export default {
       videoPlayer,
       videoSrc,
       handleStartAnalysis,
+      handleDataCollection,
+      handleVirtualLab,
+      handleSmartCourse,
       scrollToFeatures,
       onVideoLoaded,
     }

@@ -50,12 +50,22 @@
           <h4>拟合图像</h4>
           
           <div v-if="selectedIndex !== null" class="equation-plot">
+            <!-- 加载中状态 -->
+            <div v-if="isLoadingPlot" class="plot-loading">
+              <div class="loading-spinner"></div>
+              <p>正在加载图表...</p>
+            </div>
+            <!-- 图表显示 -->
             <img 
-              v-if="selectedPlot" 
+              v-else-if="selectedPlot" 
               :src="'data:image/png;base64,' + selectedPlot" 
               alt="Selected Equation Plot" 
               class="plot-image"
             />
+            <!-- 无图表时的提示 -->
+            <div v-else class="no-plot-hint">
+              <p>正在加载图表，请稍候...</p>
+            </div>
             <div class="equation-details">
               <h5>方程: {{ result.equations[selectedIndex]?.equation }}</h5>
               <p>
@@ -124,6 +134,10 @@ export default {
     variableMappingText: {
       type: String,
       default: '',
+    },
+    isLoadingPlot: {
+      type: Boolean,
+      default: false,
     },
   },
   
@@ -401,6 +415,33 @@ export default {
   color: #2c3e50;
   white-space: pre-wrap;
   font-family: monospace;
+}
+
+/* 加载状态样式 */
+.plot-loading,
+.no-plot-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #5e6c84;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(63, 122, 224, 0.2);
+  border-top-color: #3f7ae0;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 960px) {

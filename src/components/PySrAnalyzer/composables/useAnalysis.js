@@ -5,7 +5,7 @@
 
 import { ref } from 'vue'
 import PySRClient from '@/utils/pysr/pysr_client.js'
-import { getApiUrl } from '@/utils/api'
+import { getApiUrl, pysrAPI } from '@/utils/api'
 
 export function useAnalysis() {
   const pysrClient = ref(null)
@@ -15,6 +15,8 @@ export function useAnalysis() {
   const result = ref(null)
   const pollId = ref(null)
   const selectedEquationIndex = ref(null)
+  const currentTaskId = ref(null)  // 保存当前任务ID，用于按需获取图表
+  const isLoadingPlot = ref(false)  // 图表加载状态
   
   // 初始化客户端（不再需要 apiBaseUrl 参数）
   const initClient = () => {
@@ -29,11 +31,13 @@ export function useAnalysis() {
       statusMessage.value = '正在提交任务...'
       result.value = null
       selectedEquationIndex.value = null
+      currentTaskId.value = null
       
       const payload = JSON.parse(JSON.stringify(parameters))
       payload.variable_mapping = variableMapping
       
       const taskId = await pysrClient.value.submitTask(dataFile, payload)
+      currentTaskId.value = taskId  // 保存任务ID
       
       progress.value = 10
       statusMessage.value = '任务已提交，正在处理...'
@@ -108,9 +112,56 @@ export function useAnalysis() {
     }
   }
   
-  // 选择方程
-  const selectEquation = (index) => {
+  // 选择方程（会自动按需获取图表）
+  const selectEquation = async (index) => {
     selectedEquationIndex.value = index
+    
+    // 检查是否已有该方程的图表
+    if (result.value?.individual_plots) {
+      const found = result.value.individual_plots.find(p => p.model_index === index + 1)
+      if (found) {
+        return  // 已有图表，无需获取
+      }
+    }
+    
+    // 没有图表，从API按需获取
+    if (currentTaskId.value && index !== null) {
+      await fetchEquationPlot(index)
+    }
+  }
+  
+  // 按需从API获取方程图表
+  const fetchEquationPlot = async (index) => {
+    if (!currentTaskId.value || isLoadingPlot.value) return
+    
+    try {
+      isLoadingPlot.value = true
+      console.log(`[useAnalysis] 正在获取方程 ${index + 1} 的图表...`)
+      
+      const response = await pysrAPI.getEquationPlot(currentTaskId.value, index)
+      
+      if (response.success && response.plot) {
+        // 将获取的图表添加到结果中缓存
+        if (!result.value.individual_plots) {
+          result.value.individual_plots = []
+        }
+        
+        // 检查是否已存在，避免重复添加
+        const existingIndex = result.value.individual_plots.findIndex(p => p.model_index === index + 1)
+        if (existingIndex === -1) {
+          result.value.individual_plots.push({
+            model_index: index + 1,
+            ...response.plot
+          })
+        }
+        
+        console.log(`[useAnalysis] 方程 ${index + 1} 的图表已获取并缓存`)
+      }
+    } catch (error) {
+      console.error(`[useAnalysis] 获取方程图表失败:`, error)
+    } finally {
+      isLoadingPlot.value = false
+    }
   }
   
   // 获取选中方程的图表
@@ -141,6 +192,7 @@ export function useAnalysis() {
     statusMessage,
     result,
     selectedEquationIndex,
+    isLoadingPlot,  // 图表加载状态
     
     // 方法
     initClient,
@@ -148,6 +200,7 @@ export function useAnalysis() {
     runVisualizationAnalysis,
     selectEquation,
     getSelectedEquationPlot,
+    fetchEquationPlot,  // 按需获取图表
     getStatusMessage,
     cleanup,
   }

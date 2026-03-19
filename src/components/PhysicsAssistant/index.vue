@@ -20,6 +20,7 @@
       v-model:current-input="currentInput"
       :is-loading="isLoading"
       :streaming-message="streamingMessage"
+      :streaming-thinking="streamingThinking"
       :is-streaming="isStreaming"
       :has-messages="hasMessages"
       :show-experiment-info="showExperimentInfo"
@@ -89,6 +90,7 @@ export default {
       currentInput,
       isLoading,
       streamingMessage,
+      streamingThinking,
       isStreaming,
       hasMessages,
       sendMessage,
@@ -241,6 +243,7 @@ export default {
       currentInput,
       isLoading,
       streamingMessage,
+      streamingThinking,
       isStreaming,
       hasMessages,
       handleSendMessage,

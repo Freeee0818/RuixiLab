@@ -2,15 +2,25 @@
   <header class="app-header">
     <div class="header-container">
       <div class="logo-section">
-        <img 
-          src="@/assets/BUPTPhyscis.jpg" 
-          alt="北京邮电大学物理科学与技术学院" 
+        <img
+          src="@/assets/BUPTPhyscis.jpg"
+          alt="北京邮电大学物理科学与技术学院"
           class="logo-image"
         />
       </div>
       <div class="header-actions">
         <router-link to="/" class="nav-item">首页</router-link>
         <router-link to="/analysis" class="nav-item">分析</router-link>
+        <router-link to="/data-collection" class="nav-item">采集</router-link>
+        <a href="http://10.161.25.80:8000" target="_blank" class="nav-item"
+          >虚拟实验</a
+        >
+        <a
+          href="http://t.zhihuishu.com/NaXDze0e"
+          target="_blank"
+          class="nav-item"
+          >智慧课程</a
+        >
       </div>
     </div>
   </header>
@@ -18,7 +28,7 @@
 
 <script>
 export default {
-  name: 'AppHeader'
+  name: "AppHeader",
 };
 </script>
 

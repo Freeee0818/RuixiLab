@@ -46,6 +46,7 @@
         :selected-index="selectedEquationIndex"
         :selected-plot="getSelectedEquationPlot()"
         :variable-mapping-text="variableMappingText"
+        :is-loading-plot="isLoadingPlot"
         @select-equation="selectEquation"
       />
     </div>
@@ -95,6 +96,7 @@ export default {
       statusMessage,
       result,
       selectedEquationIndex,
+      isLoadingPlot,
       initClient,
       runSymbolicRegression,
       runVisualizationAnalysis,
@@ -165,6 +167,7 @@ export default {
       statusMessage,
       result,
       selectedEquationIndex,
+      isLoadingPlot,
       variableMappingText,
       handleTableUsed,
       handleRunAnalysis,

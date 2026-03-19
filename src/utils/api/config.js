@@ -8,7 +8,8 @@ export const API_SERVICES = {
   // PySR符号回归服务
   PYSR: {
     name: 'PySR Service',
-    baseURL: import.meta.env.VITE_PYSR_API_URL || 'http://localhost:8000',
+    // 打包一体时用相对路径 /api；开发时用 VITE_PYSR_API_URL 或 localhost:8000
+    baseURL: import.meta.env.VITE_PYSR_API_URL ?? (import.meta.env.PROD ? '/api' : 'http://localhost:8000'),
     timeout: 120000, // 符号回归和图片传输需要较长时间（120秒）
   },
   
@@ -33,7 +34,9 @@ export const API_ENDPOINTS = {
   PYSR: {
     TASKS: '/tasks',
     TASK_DETAIL: (taskId) => `/tasks/${taskId}`,
+    EQUATION_PLOT: (taskId, equationIndex) => `/tasks/${taskId}/equation/${equationIndex}/plot`,  // 按需获取方程图表
     ANALYZE_EXPERIMENT: '/analyze_experiment',
+    SERVICE_STATUS: '/service-status',  // 服务状态（检查是否繁忙、队列长度等）
   },
   
   // 数据分析服务端点

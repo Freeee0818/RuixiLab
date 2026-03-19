@@ -47,6 +47,17 @@
             </span>
             <span class="message-time">{{ msg.timestamp }}</span>
           </div>
+
+          <!-- 思考过程折叠块（仅 assistant 消息且有 thinking 内容） -->
+          <div v-if="msg.role === 'assistant' && msg.thinking" class="thinking-block">
+            <button class="thinking-toggle" @click="toggleThinking(index)">
+              <span class="thinking-icon">💭</span>
+              <span>思考过程</span>
+              <span class="thinking-arrow" :class="{ open: expandedThinking[index] }">▸</span>
+            </button>
+            <div v-show="expandedThinking[index]" class="thinking-content" v-html="renderContent(msg.thinking)"></div>
+          </div>
+
           <div class="message-content" v-html="renderContent(msg.content)"></div>
           
           <div v-if="msg.role === 'assistant'" class="message-actions">
@@ -65,7 +76,16 @@
         <div class="message assistant streaming">
           <div class="message-header">
             <span class="message-role">AI 助教</span>
-            <span class="message-time">输入中...</span>
+            <span class="message-time">思考中...</span>
+          </div>
+          <!-- 流式思考过程折叠块 -->
+          <div v-if="streamingThinking" class="thinking-block">
+            <button class="thinking-toggle" @click="streamingThinkingExpanded = !streamingThinkingExpanded">
+              <span class="thinking-icon">💭</span>
+              <span>思考过程</span>
+              <span class="thinking-arrow" :class="{ open: streamingThinkingExpanded }">▸</span>
+            </button>
+            <div v-show="streamingThinkingExpanded" class="thinking-content" v-html="renderContent(streamingThinking)"></div>
           </div>
           <div class="message-content" v-html="renderContent(streamingMessage)"></div>
           <div class="typing-indicator">
@@ -127,6 +147,10 @@ export default {
       type: String,
       default: '',
     },
+    streamingThinking: {
+      type: String,
+      default: '',
+    },
     isStreaming: {
       type: Boolean,
       default: false,
@@ -146,6 +170,12 @@ export default {
   setup(props, { emit }) {
     const messagesContainer = ref(null)
     const { renderContent, getPlainText } = useMessageFormat()
+    const expandedThinking = ref({})           // 各历史消息的折叠状态
+    const streamingThinkingExpanded = ref(false) // 流式阶段的折叠状态
+
+    const toggleThinking = (index) => {
+      expandedThinking.value[index] = !expandedThinking.value[index]
+    }
     
     // 滚动到底部
     const scrollToBottom = () => {
@@ -204,6 +234,9 @@ export default {
       handleClearMessages,
       copyMessage,
       regenerate,
+      expandedThinking,
+      streamingThinkingExpanded,
+      toggleThinking,
     }
   },
 }
@@ -449,6 +482,58 @@ export default {
   background-color: rgba(231, 76, 60, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.thinking-block {
+  margin-bottom: 10px;
+  border: 1px solid rgba(156, 120, 255, 0.25);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(156, 120, 255, 0.04);
+}
+
+.thinking-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: #7c5cbf;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.thinking-toggle:hover {
+  background: rgba(156, 120, 255, 0.08);
+}
+
+.thinking-icon {
+  font-size: 13px;
+}
+
+.thinking-arrow {
+  margin-left: auto;
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 11px;
+}
+
+.thinking-arrow.open {
+  transform: rotate(90deg);
+}
+
+.thinking-content {
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  color: #6b5c8c;
+  line-height: 1.6;
+  border-top: 1px solid rgba(156, 120, 255, 0.15);
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .message-actions {

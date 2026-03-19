@@ -60,6 +60,30 @@ export const pysrAPI = {
   },
 
   /**
+   * 获取服务状态
+   * @returns {Promise<Object>} 服务状态信息
+   * @returns {boolean} return.is_busy - 服务是否繁忙
+   * @returns {string|null} return.running_task_id - 当前运行的任务ID
+   * @returns {number} return.queue_length - 队列中等待的任务数
+   * @returns {Array<string>} return.queued_tasks - 队列中的任务ID列表
+   */
+  async getServiceStatus() {
+    return client.get(API_ENDPOINTS.PYSR.SERVICE_STATUS)
+  },
+
+  /**
+   * 按需获取指定方程的图表
+   * @param {string} taskId - 任务ID
+   * @param {number} equationIndex - 方程索引（从0开始）
+   * @returns {Promise<Object>} 图表数据
+   * @returns {boolean} return.success - 是否成功
+   * @returns {Object} return.plot - 图表信息（包含plot字段为base64图片）
+   */
+  async getEquationPlot(taskId, equationIndex) {
+    return client.get(API_ENDPOINTS.PYSR.EQUATION_PLOT(taskId, equationIndex))
+  },
+
+  /**
    * AI实验分析助手
    * @param {Object} data - 实验数据
    * @param {string} [data.background] - 实验背景
@@ -106,13 +130,16 @@ export const pysrAPI = {
         try {
           const taskInfo = await this.getTaskStatus(taskId)
           
-          // 计算进度（基于状态）
+          // 计算进度（基于状态和队列位置）
           let progress = 10
-          if (taskInfo.status === 'queued') progress = 10
-          else if (taskInfo.status === 'running') {
+          if (taskInfo.status === 'queued') {
+            // 根据队列位置计算进度（5-10%之间）
+            const queuePosition = taskInfo.queue_position || 0
+            progress = Math.max(5, 10 - queuePosition)
+          } else if (taskInfo.status === 'running') {
             if (taskInfo.status_message?.includes('处理数据')) progress = 20
             else if (taskInfo.status_message?.includes('初始化')) progress = 30
-            else if (taskInfo.status_message?.includes('运行')) progress = 50
+            else if (taskInfo.status_message?.includes('运行') || taskInfo.status_message?.includes('拟合')) progress = 50
             else if (taskInfo.status_message?.includes('生成图表')) progress = 70
             else progress = 50
           } else if (taskInfo.status === 'completed') progress = 100

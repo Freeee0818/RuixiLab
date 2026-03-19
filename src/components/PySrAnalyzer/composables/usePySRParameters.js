@@ -110,10 +110,6 @@ export function usePySRParameters() {
     formulaAlgorithm,
     
     // 运算符
-    binary_add,
-    binary_subtract,
-    binary_multiply,
-    binary_divide,
     unaryOperators,
     
     // 计算属性
