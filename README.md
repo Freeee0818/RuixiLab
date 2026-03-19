@@ -139,7 +139,6 @@ GuideLab/
 
 ## 📄 相关文档
 
-- [阿里云 RAG 部署指南](docs/ALIYUN_RAG_DEPLOYMENT.md)
 - [SETUP_CONFIG.md](SETUP_CONFIG.md) - 详细配置说明
 
 ---
