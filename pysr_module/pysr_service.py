@@ -6,6 +6,7 @@ PySR Service Module - 将PySR/Julia功能封装为可以从Web应用调用的服
 """
 
 import os
+import sys
 import json
 import re
 import numpy as np
@@ -18,10 +19,28 @@ import io
 import base64
 import matplotlib.pyplot as plt
 import logging
+from multiprocessing import Process, Queue, Manager
+from concurrent.futures import ProcessPoolExecutor
+import subprocess
 
 # 配置日志
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# 导入配置（支持多任务并发）
+try:
+    # 添加项目根目录到Python路径
+    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
+    
+    from config import settings
+    MAX_CONCURRENT_TASKS = getattr(settings, 'PYSR_MAX_CONCURRENT_TASKS', 3)
+    logger.info(f"PySR并发配置: 最多同时运行 {MAX_CONCURRENT_TASKS} 个任务")
+except (ImportError, AttributeError) as e:
+    # 如果配置不可用，使用默认值或环境变量
+    MAX_CONCURRENT_TASKS = int(os.getenv('PYSR_MAX_CONCURRENT_TASKS', '3'))
+    logger.warning(f"无法导入配置 ({e})，使用默认并发数: {MAX_CONCURRENT_TASKS}")
 
 
 def _json_converter(o):
@@ -64,6 +83,7 @@ class SymbolicRegressionTask:
         self.start_time = None
         self.end_time = None
         self.status_message = "已创建任务，等待处理"
+        self.equations_data = None  # 保存原始方程数据，供按需生成图表
         
     def to_dict(self) -> Dict[str, Any]:
         """将任务转换为字典格式以便JSON序列化"""
@@ -84,10 +104,26 @@ class SymbolicRegressionTask:
 class PySRService:
     """PySR服务类 - 管理符号回归任务"""
     
-    def __init__(self, output_dir: str = "output"):
+    def __init__(self, output_dir: str = "output", max_concurrent_tasks: int = None):
         self.tasks = {}  # 存储所有任务
         self.output_dir = output_dir
         self.lock = threading.Lock()  # 用于线程安全操作
+        
+        # 并发控制：允许同时运行多个PySR任务（可配置）
+        self.max_concurrent_tasks = max_concurrent_tasks or MAX_CONCURRENT_TASKS
+        self.running_task_ids = set()  # 当前正在运行的任务ID集合（支持多任务并发）
+        self.task_queue = []  # 等待执行的任务队列
+        self.queue_lock = threading.Lock()  # 队列锁
+        
+        # 使用subprocess执行任务，每个任务运行在独立进程中
+        # 每个进程有独立的Julia实例，完全隔离，避免冲突
+        # 注意：不使用ProcessPoolExecutor，因为self包含锁对象无法序列化
+        # 改用threading + subprocess的方式
+        
+        # worker脚本路径
+        self.worker_script = os.path.join(os.path.dirname(__file__), 'task_worker.py')
+        
+        logger.info(f"PySR服务初始化: 使用独立进程执行任务，最大并发数 = {self.max_concurrent_tasks}")
         
         # 确保输出目录存在
         os.makedirs(output_dir, exist_ok=True)
@@ -119,34 +155,270 @@ class PySRService:
         with self.lock:
             return [task.to_dict() for task in self.tasks.values()]
     
+    def is_busy(self) -> bool:
+        """检查服务是否正在执行任务（是否有空闲槽位）"""
+        with self.queue_lock:
+            return len(self.running_task_ids) >= self.max_concurrent_tasks
+    
+    def get_queue_position(self, task_id: str) -> int:
+        """获取任务在队列中的位置，-1表示不在队列中，0表示正在运行"""
+        with self.queue_lock:
+            if task_id in self.running_task_ids:
+                return 0
+            try:
+                return self.task_queue.index(task_id) + 1
+            except ValueError:
+                return -1
+    
+    def get_available_slots(self) -> int:
+        """获取当前可用的并发槽位数量"""
+        with self.queue_lock:
+            return max(0, self.max_concurrent_tasks - len(self.running_task_ids))
+    
     def start_task(self, task_id: str) -> bool:
-        """开始执行任务"""
+        """开始执行任务（带并发控制，支持多任务并发）"""
         with self.lock:
             task = self.tasks.get(task_id)
             if not task or task.status != "pending":
                 return False
-            
-            task.status = "running"
-            task.status_message = "正在初始化..."
-            task.start_time = time.time()
         
-        # 在新线程中运行任务
-        thread = threading.Thread(target=self._run_task, args=(task_id,))
-        thread.daemon = True
-        thread.start()
+        # 检查是否有空闲的并发槽位
+        with self.queue_lock:
+            available_slots = self.max_concurrent_tasks - len(self.running_task_ids)
+            
+            if available_slots <= 0:
+                # 没有空闲槽位，将新任务加入队列
+                if task_id not in self.task_queue:
+                    self.task_queue.append(task_id)
+                    with self.lock:
+                        task = self.tasks.get(task_id)
+                        if task:
+                            queue_pos = len(self.task_queue)
+                            task.status = "queued"
+                            task.status_message = f"排队中，前面还有 {queue_pos} 个任务（当前运行 {len(self.running_task_ids)}/{self.max_concurrent_tasks}）"
+                    logger.info(f"任务 {task_id} 加入队列，位置: {len(self.task_queue)}，当前运行: {len(self.running_task_ids)}/{self.max_concurrent_tasks}")
+                return True
+            
+            # 有空闲槽位，直接开始执行
+            self.running_task_ids.add(task_id)
+            logger.info(f"任务 {task_id} 开始执行（当前运行: {len(self.running_task_ids)}/{self.max_concurrent_tasks}）")
+        
+        with self.lock:
+            task = self.tasks.get(task_id)
+            if task:
+                task.status = "running"
+                task.status_message = "正在初始化..."
+                task.start_time = time.time()
+        
+            # 使用后台线程+subprocess执行任务（避免序列化self的问题）
+            thread = threading.Thread(target=self._run_task_with_subprocess, args=(task_id,))
+            thread.daemon = True
+            thread.start()
         
         return True
     
-    def _run_task(self, task_id: str) -> None:
-        """在后台线程中执行任务"""
+    def _run_task_with_subprocess(self, task_id: str) -> None:
+        """在后台线程中使用subprocess执行任务（通过subprocess调用worker脚本）"""
         task = self.tasks.get(task_id)
         if not task:
+            logger.warning(f"[Worker进程] 找不到任务: {task_id}")
+            return
+        
+        try:
+            # 使用subprocess调用独立的worker脚本
+            # 每个worker在独立进程中运行，有独立的Julia实例
+            python_exe = sys.executable
+            
+            # 准备参数
+            params_json = json.dumps(task.parameters or {})
+            
+            logger.info(f"[Worker进程启动] 任务 {task_id}, PID={os.getpid()}")
+            
+            # 调用worker脚本
+            result = subprocess.run(
+                [python_exe, self.worker_script,
+                 '--file', task.file_path,
+                 '--params', params_json,
+                 '--task-id', task_id],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',  # Windows上需要指定UTF-8编码
+                errors='replace',  # 遇到无法解码的字符时替换而不是报错
+                timeout=3600  # 1小时超时
+            )
+            
+            # 处理结果 - 从stdout中提取JSON（使用标记识别）
+            JSON_MARKER = "===PYSR_JSON_RESULT_START==="
+            
+            if result.returncode == 0:
+                # 检查是否有输出
+                if not result.stdout:
+                    logger.error(f"[Worker进程错误] 任务 {task_id}: worker没有输出，stderr={result.stderr}")
+                    self._handle_worker_result(task_id, {
+                        "success": False, 
+                        "error": f"Worker没有输出: {result.stderr or 'Unknown error'}"
+                    })
+                    return
+                
+                # 提取JSON结果（标记后的内容）
+                stdout = result.stdout
+                if JSON_MARKER in stdout:
+                    # 找到标记后的JSON内容
+                    json_start = stdout.index(JSON_MARKER) + len(JSON_MARKER)
+                    json_str = stdout[json_start:].strip()
+                else:
+                    # 没有标记，尝试直接解析（兼容旧版本）
+                    json_str = stdout.strip()
+                
+                # 解析worker返回的结果
+                try:
+                    worker_result = json.loads(json_str)
+                    self._handle_worker_result(task_id, worker_result)
+                except json.JSONDecodeError as e:
+                    logger.error(f"[Worker进程错误] 任务 {task_id}: JSON解析失败，json_str={json_str[:500] if json_str else 'empty'}, stderr={result.stderr}")
+                    self._handle_worker_result(task_id, {
+                        "success": False, 
+                        "error": f"Worker输出格式错误: {str(e)}"
+                    })
+            else:
+                # 进程返回非0，尝试从输出中提取错误信息
+                stdout = result.stdout or ""
+                if JSON_MARKER in stdout:
+                    json_start = stdout.index(JSON_MARKER) + len(JSON_MARKER)
+                    json_str = stdout[json_start:].strip()
+                    try:
+                        worker_result = json.loads(json_str)
+                        self._handle_worker_result(task_id, worker_result)
+                        return
+                    except json.JSONDecodeError:
+                        pass
+                
+                error_msg = result.stderr or result.stdout or "Unknown error"
+                logger.error(f"[Worker进程错误] 任务 {task_id}: returncode={result.returncode}")
+                self._handle_worker_result(task_id, {"success": False, "error": error_msg})
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"[Worker进程超时] 任务 {task_id} 执行超时")
+            self._handle_worker_result(task_id, {"success": False, "error": "Task execution timeout"})
+        except Exception as e:
+            logger.error(f"[Worker进程异常] 任务 {task_id}: {str(e)}", exc_info=True)
+            self._handle_worker_result(task_id, {"success": False, "error": str(e)})
+        finally:
+            # 清理运行集合
+            with self.queue_lock:
+                self.running_task_ids.discard(task_id)
+                logger.info(f"任务 {task_id} 完成，从运行集合中移除（剩余: {len(self.running_task_ids)}/{self.max_concurrent_tasks}）")
+            
+            # 处理队列中的下一个任务
+            self._process_next_task()
+    
+    def _handle_worker_result(self, task_id: str, worker_result: Dict[str, Any]) -> None:
+        """处理worker进程返回的结果"""
+        try:
+            
+            if worker_result.get("success"):
+                # 任务成功，生成图表并更新结果
+                logger.info(f"[任务完成] task_id={task_id}, 正在生成图表...")
+                
+                # 在主进程中生成图表（因为matplotlib不能在子进程中使用）
+                # 这里需要从worker结果中提取方程数据，然后生成图表
+                task = self.tasks.get(task_id)
+                if task and worker_result.get("result"):
+                    # 读取数据用于生成图表
+                    X, y = self._process_data(task.file_path)
+                    
+                    # 从worker结果中提取方程数据
+                    equations_data = worker_result["result"]["equations"]
+                    
+                    # 从方程数据生成完整的图表（在主进程中）
+                    result = self._generate_results_from_equations(
+                        equations_data,
+                        X, y, task_id, task.parameters
+                    )
+                    
+                    # 更新任务状态
+                    with self.lock:
+                        task = self.tasks.get(task_id)
+                        if task:
+                            task.status = "completed"
+                            task.result = result
+                            task.progress = 100
+                            task.status_message = "分析完成"
+                            task.end_time = time.time()
+            else:
+                # 任务失败
+                error_msg = worker_result.get("error", "Unknown error")
+                with self.lock:
+                    task = self.tasks.get(task_id)
+                    if task:
+                        task.status = "failed"
+                        task.error = error_msg
+                        task.status_message = f"分析失败: {error_msg}"
+                        task.end_time = time.time()
+                        
+        except Exception as e:
+            logger.error(f"[任务回调错误] task_id={task_id}: {str(e)}", exc_info=True)
+            with self.lock:
+                task = self.tasks.get(task_id)
+                if task:
+                    task.status = "failed"
+                    task.error = str(e)
+                    task.status_message = f"分析失败: {str(e)}"
+                    task.end_time = time.time()
+    
+    def _process_next_task(self) -> None:
+        """处理队列中的下一个任务（支持多任务并发）"""
+        # 尝试从队列中取出尽可能多的任务（直到达到并发上限）
+        tasks_to_start = []
+        
+        with self.queue_lock:
+            # 计算可用的槽位
+            available_slots = self.max_concurrent_tasks - len(self.running_task_ids)
+            
+            # 从队列中取出任务，直到填满所有可用槽位
+            while available_slots > 0 and self.task_queue:
+                next_task_id = self.task_queue.pop(0)
+                if next_task_id not in self.running_task_ids:
+                    self.running_task_ids.add(next_task_id)
+                    tasks_to_start.append(next_task_id)
+                    available_slots -= 1
+                    logger.info(f"从队列取出任务: {next_task_id}（当前运行: {len(self.running_task_ids)}/{self.max_concurrent_tasks}）")
+            
+            # 更新队列中剩余任务的状态信息
+            for i, queued_id in enumerate(self.task_queue):
+                with self.lock:
+                    task = self.tasks.get(queued_id)
+                    if task:
+                        task.status_message = f"排队中，前面还有 {i} 个任务（当前运行 {len(self.running_task_ids)}/{self.max_concurrent_tasks}）"
+        
+        # 启动所有待执行的任务
+        for task_id in tasks_to_start:
+            with self.lock:
+                task = self.tasks.get(task_id)
+                if task:
+                    task.status = "running"
+                    task.status_message = "正在初始化..."
+                    task.start_time = time.time()
+            
+            # 使用后台线程+subprocess执行任务（避免序列化self的问题）
+            thread = threading.Thread(target=self._run_task_with_subprocess, args=(task_id,))
+            thread.daemon = True
+            thread.start()
+    
+    def _run_task(self, task_id: str) -> None:
+        """在后台线程中执行任务"""
+        # 在开始时记录task_id，确保整个执行过程中使用正确的task_id
+        logger.debug(f"[任务执行开始] task_id={task_id}")
+        task = self.tasks.get(task_id)
+        if not task:
+            logger.warning(f"[任务执行失败] 找不到任务: task_id={task_id}")
             return
         
         try:
             # 更新进度
             def update_progress(progress: int, message: str = ""):
                 with self.lock:
+                    # 确保使用传入的task_id获取任务（闭包捕获）
                     task = self.tasks.get(task_id)
                     if task:
                         task.progress = progress
@@ -171,23 +443,45 @@ class PySRService:
             model_params = self._get_model_parameters(task.parameters)
 
             # 创建并拟合模型
-            update_progress(30, "正在拟合模型...")
-            model = PySRRegressor(**model_params)
+            # 注意：Julia后端初始化/编译不是线程安全的，需要加锁保护
+            # 使用锁确保Julia后端初始化串行化，避免多个任务同时编译导致冲突
+            with self.julia_init_lock:
+                if not self.julia_initialized:
+                    logger.info(f"[Julia初始化] 任务 {task_id} 正在初始化Julia后端（首次，可能需要编译）...")
+                    update_progress(30, "正在初始化Julia后端（首次编译，可能需要几分钟）...")
+                
+                # 创建模型实例（首次会触发Julia编译，后续可以复用已编译的后端）
+                model = PySRRegressor(**model_params)
+                
+                if not self.julia_initialized:
+                    self.julia_initialized = True
+                    logger.info(f"[Julia初始化完成] Julia后端已就绪，后续任务可以更快启动")
+            # 锁释放后，其他等待的任务可以继续创建模型（Julia后端已编译好）
+            
+            update_progress(40, "正在拟合模型...")
             model.fit(X, y)
 
             # 生成结果
             update_progress(70, "正在生成图表...")
             result = self._generate_results(model, X, y, task_id)
             
-            # 完成任务
+            # 完成任务 - 确保使用正确的task_id更新任务状态
             with self.lock:
                 task = self.tasks.get(task_id)
                 if task:
+                    # 验证task_id是否匹配（双重检查）
+                    if task.task_id != task_id:
+                        logger.error(f"[严重错误] 任务ID不匹配！期望: {task_id}, 实际: {task.task_id}")
+                        return
+                    
                     task.status = "completed"
                     task.result = result
                     task.progress = 100
                     task.status_message = "分析完成"
                     task.end_time = time.time()
+                    logger.info(f"[任务完成] task_id={task_id}, status={task.status}")
+                else:
+                    logger.warning(f"[任务完成失败] 找不到任务: task_id={task_id}")
             
         except Exception as e:
             logger.error(f"任务 {task_id} 执行出错: {str(e)}", exc_info=True)
@@ -347,6 +641,268 @@ class PySRService:
         except Exception as e:
             logger.error(f"生成结果时出错: {str(e)}", exc_info=True)
             raise
+
+    def _generate_results_from_equations(
+        self, 
+        equations_data: List[Dict[str, Any]], 
+        X: np.ndarray, 
+        y: np.ndarray, 
+        task_id: str,
+        parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        从方程数据生成结果（只画第一个方程的图，其他按需生成）
+        """
+        try:
+            variable_mapping = parameters.get('variable_mapping', {}) if parameters else {}
+            result = {
+                "equations": [],
+                "complexity_plot": None,
+                "fitting_plot": None,
+                "individual_plots": []
+            }
+            
+            if not equations_data:
+                logger.warning(f"[生成结果] 任务 {task_id} 没有方程数据")
+                return result
+            
+            logger.info(f"[生成结果] 任务 {task_id}: 开始生成图表，共 {len(equations_data)} 个方程")
+            
+            # 只生成复杂度-得分图和第一个（最佳）方程的拟合图
+            result["complexity_plot"] = self._create_complexity_plot_from_equations(equations_data)
+            
+            # 只画第一个方程的图
+            first_plot = self._create_single_equation_plot(equations_data[0], X, y, 0, variable_mapping)
+            if first_plot:
+                result["individual_plots"] = [first_plot]
+                result["fitting_plot"] = first_plot.get('plot')  # 第一个方程图作为总览图
+            
+            # 格式化方程数据（不包含图，图按需生成）
+            y_name = variable_mapping.get('y_variable', {}).get('name', 'y') if variable_mapping else 'y'
+            for i, eq_data in enumerate(equations_data):
+                equation_str = eq_data.get('equation', '')
+                replaced_equation = self._replace_variable_names(equation_str, variable_mapping)
+                formatted_eq = {
+                    'equation': f"{y_name} = {replaced_equation}" if not replaced_equation.startswith(y_name + ' =') else replaced_equation,
+                    'complexity': eq_data.get('complexity', 0),
+                    'score': eq_data.get('score', 0.0),
+                    'loss': eq_data.get('loss', 0.0),
+                    'is_best': i == 0,
+                    'has_plot': i == 0  # 标记是否已有图
+                }
+                result["equations"].append(formatted_eq)
+            
+            # 保存原始数据供后续按需生成图表
+            task = self.tasks.get(task_id)
+            if task:
+                task.equations_data = equations_data  # 保存原始方程数据
+            
+            logger.info(f"[生成结果完成] 任务 {task_id}: {len(result['equations'])} 个方程，已生成1个图表")
+            return result
+        except Exception as e:
+            logger.error(f"从方程数据生成结果时出错: {str(e)}", exc_info=True)
+            return {
+                "equations": equations_data,
+                "complexity_plot": None,
+                "fitting_plot": None,
+                "individual_plots": []
+            }
+    
+    def _create_single_equation_plot(
+        self, 
+        eq_data: Dict[str, Any], 
+        X: np.ndarray, 
+        y: np.ndarray, 
+        index: int,
+        variable_mapping: Dict[str, Any] = None
+    ) -> Optional[Dict]:
+        """为单个方程生成图表"""
+        try:
+            if variable_mapping:
+                x_variables = variable_mapping.get('x_variables', [])
+                y_name = variable_mapping.get('y_variable', {}).get('name', 'Y')
+            else:
+                x_variables = []
+                y_name = 'Y'
+            
+            eq_str = eq_data.get('equation', '')
+            eq_str_eval = eq_str.replace('sin', 'np.sin').replace('cos', 'np.cos')
+            eq_str_eval = eq_str_eval.replace('exp', 'np.exp').replace('log', 'np.log')
+            eq_str_eval = eq_str_eval.replace('x0', 'x')
+            
+            # 单维情况
+            if X.ndim == 1 or (X.ndim == 2 and X.shape[1] == 1):
+                X_flat = X.flatten() if X.ndim > 1 else X
+                x_name = x_variables[0].get('name', 'X') if len(x_variables) > 0 else 'X'
+                
+                x_range = X_flat.max() - X_flat.min()
+                x_padding = x_range * 0.05
+                X_smooth = np.linspace(X_flat.min() - x_padding, X_flat.max() + x_padding, 500)
+                
+                # 计算预测值
+                y_pred = np.array([eval(eq_str_eval.replace('x', str(x_val)), {'np': np}) for x_val in X_smooth])
+                valid_idx = ~np.isnan(y_pred)
+                
+                if np.sum(valid_idx) == 0:
+                    return None
+                
+                replaced_eq = self._replace_variable_names(eq_data.get('equation', ''), variable_mapping)
+                
+                # 创建图表
+                plt.figure(figsize=(8, 6))
+                plt.style.use('seaborn-v0_8-whitegrid')
+                plt.scatter(X_flat, y, c='gray', alpha=0.5, label='Original Data', s=30)
+                plt.plot(X_smooth[valid_idx], y_pred[valid_idx], color='red', linewidth=2.5, 
+                       label=f'Model {index+1}', alpha=0.9)
+                
+                eq_info = f"Equation: {y_name} = {replaced_eq}\nComplexity: {eq_data.get('complexity', 0)}\nLoss: {eq_data.get('loss', 0.0):.6f}\nScore: {eq_data.get('score', 0.0):.6f}"
+                plt.figtext(0.02, 0.02, eq_info, fontsize=9,
+                           bbox=dict(facecolor='white', alpha=0.9, boxstyle='round,pad=0.5'))
+                plt.xlabel(x_name, fontsize=12)
+                plt.ylabel(y_name, fontsize=12)
+                plt.title(f'Best Fit: {y_name} vs {x_name}', fontsize=14, fontweight='bold')
+                plt.legend(loc='best', fontsize=10)
+                plt.grid(True, linestyle='--', alpha=0.7)
+                plt.tight_layout()
+                
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+                buf.seek(0)
+                plot_b64 = base64.b64encode(buf.getvalue()).decode()
+                plt.close()
+                
+                return {
+                    'model_index': index + 1,
+                    'equation': eq_data.get('equation', ''),
+                    'complexity': eq_data.get('complexity', 0),
+                    'score': eq_data.get('score', 0.0),
+                    'loss': eq_data.get('loss', 0.0),
+                    'plot': plot_b64
+                }
+            else:
+                # 多维情况暂不支持单图
+                return None
+        except Exception as e:
+            logger.error(f"生成单个方程图表时出错: {str(e)}", exc_info=True)
+            return None
+    
+    def generate_equation_plot(self, task_id: str, equation_index: int) -> Optional[Dict]:
+        """按需生成指定方程的图表（供API调用）"""
+        task = self.tasks.get(task_id)
+        if not task or task.status != "completed":
+            return None
+        
+        equations_data = getattr(task, 'equations_data', None)
+        if not equations_data or equation_index >= len(equations_data):
+            return None
+        
+        try:
+            X, y = self._process_data(task.file_path)
+            variable_mapping = task.parameters.get('variable_mapping', {}) if task.parameters else {}
+            
+            plot_data = self._create_single_equation_plot(
+                equations_data[equation_index], X, y, equation_index, variable_mapping
+            )
+            return plot_data
+        except Exception as e:
+            logger.error(f"按需生成方程图表时出错: {str(e)}", exc_info=True)
+            return None
+    
+    def _create_complexity_plot_from_equations(self, equations_data: List[Dict[str, Any]]) -> str:
+        """从方程数据创建复杂度-得分图"""
+        try:
+            if not equations_data:
+                return None
+            sorted_eqs = sorted(equations_data, key=lambda x: x.get('complexity', 0))
+            complexities = [eq.get('complexity', 0) for eq in sorted_eqs]
+            scores = [eq.get('score', 0.0) for eq in sorted_eqs]
+            
+            plt.figure(figsize=(6, 4))
+            ax = plt.gca()
+            ax.scatter(complexities, scores, c='tab:blue', alpha=0.6, s=50)
+            ax.plot(complexities, scores, color='tab:blue', alpha=0.8, linewidth=2)
+            best_idx = max(range(len(scores)), key=lambda i: scores[i])
+            ax.scatter([complexities[best_idx]], [scores[best_idx]], c='red', marker='*', s=200, zorder=5)
+            ax.set_xlabel('Complexity', fontsize=12)
+            ax.set_ylabel('Score', fontsize=12)
+            plt.title('Score vs Complexity', fontsize=14)
+            ax.grid(True, linestyle='--', alpha=0.7)
+            plt.tight_layout()
+            
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', dpi=80, bbox_inches='tight')
+            buf.seek(0)
+            plot_b64 = base64.b64encode(buf.getvalue()).decode()
+            plt.close()
+            return plot_b64
+        except Exception as e:
+            logger.error(f"创建复杂度-得分图时出错: {str(e)}", exc_info=True)
+            return None
+    
+    def _create_fitting_plots_from_equations(
+        self, equations_data: List[Dict[str, Any]], X: np.ndarray, y: np.ndarray, 
+        variable_mapping: Dict[str, Any] = None
+    ) -> Tuple[str, List[Dict]]:
+        """从方程数据创建拟合图"""
+        try:
+            if not equations_data:
+                return None, []
+            if variable_mapping:
+                x_variables = variable_mapping.get('x_variables', [])
+                y_name = variable_mapping.get('y_variable', {}).get('name', 'Y')
+            else:
+                x_variables = []
+                y_name = 'Y'
+            
+            sorted_eqs = sorted(equations_data, key=lambda x: x.get('score', 0.0), reverse=True)
+            
+            # 单维情况
+            if X.ndim == 1 or (X.ndim == 2 and X.shape[1] == 1):
+                X_flat = X.flatten() if X.ndim > 1 else X
+                x_name = x_variables[0].get('name', 'X') if len(x_variables) > 0 else 'X'
+                
+                plt.figure(figsize=(8, 6))
+                plt.style.use('seaborn-v0_8-whitegrid')
+                plt.scatter(X_flat, y, c='gray', alpha=0.5, label='Original Data')
+                
+                colors = ['red', 'blue', 'green', 'purple', 'orange']
+                x_range = X_flat.max() - X_flat.min()
+                x_padding = x_range * 0.05
+                X_smooth = np.linspace(X_flat.min() - x_padding, X_flat.max() + x_padding, 500)
+                
+                individual_plots = []
+                for i, eq_data in enumerate(sorted_eqs[:5]):  # 只绘制前5个方程
+                    try:
+                        eq_str = eq_data.get('equation', '').replace('sin', 'np.sin').replace('cos', 'np.cos')
+                        eq_str = eq_str.replace('exp', 'np.exp').replace('log', 'np.log').replace('x0', 'x')
+                        y_pred = np.array([eval(eq_str.replace('x', str(x_val)), {'np': np}) for x_val in X_smooth])
+                        valid_idx = ~np.isnan(y_pred)
+                        if np.sum(valid_idx) > 0:
+                            color_idx = i % len(colors)
+                            replaced_eq = self._replace_variable_names(eq_data.get('equation', ''), variable_mapping)
+                            plt.plot(X_smooth[valid_idx], y_pred[valid_idx], color=colors[color_idx], 
+                                   linewidth=2.5, label=f"Model {i+1}", alpha=0.85)
+                    except Exception:
+                        continue
+                
+                plt.xlabel(x_name, fontsize=12)
+                plt.ylabel(y_name, fontsize=12)
+                plt.title(f'All Fitting Results: {y_name} vs {x_name}', fontsize=14)
+                plt.legend(loc='best', fontsize=10)
+                plt.grid(True, linestyle='--', alpha=0.7)
+                plt.tight_layout()
+                
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=80, bbox_inches='tight')
+                buf.seek(0)
+                all_fitting_plot = base64.b64encode(buf.getvalue()).decode()
+                plt.close()
+                
+                return all_fitting_plot, individual_plots
+            return None, []
+        except Exception as e:
+            logger.error(f"创建拟合图时出错: {str(e)}", exc_info=True)
+            return None, []
 
     def _replace_variable_names(self, equation: str, variable_mapping: Dict[str, Any]) -> str:
         """将方程中的 PySR 默认变量名替换为用户定义的变量名"""
@@ -727,24 +1283,56 @@ def start_regression_task(task_id: str) -> Dict[str, Any]:
     return {"success": success}
 
 def get_task_status(task_id: str) -> Dict[str, Any]:
-    """获取任务状态"""
+    """获取任务状态 - 确保返回正确的任务ID和对应的结果"""
     task = service.get_task(task_id)
     if task:
-        return {
+        # 验证返回的任务ID是否与请求的task_id一致
+        task_dict_id = task.get("task_id")
+        if task_dict_id and task_dict_id != task_id:
+            logger.error(f"[严重错误] 任务ID不匹配！请求: {task_id}, 任务中的ID: {task_dict_id}")
+        
+        # 获取队列位置信息
+        queue_position = service.get_queue_position(task_id)
+        
+        # 确保响应中的task_id与请求的一致（使用请求的task_id，而不是任务字典中的）
+        response = {
             "success": True,
-            "task_id": task_id,
+            "task_id": task_id,  # 使用请求的task_id，确保一致性
             "status": task["status"],
             "status_message": task["status_message"],
             "progress": task["progress"],
-            # 如果任务完成，添加结果
-            "results": task["result"]["equations"] if task["status"] == "completed" and task["result"] else None,
-            "complexity_plot": task["result"]["complexity_plot"] if task["status"] == "completed" and task["result"] else None, 
-            "fitting_plot": task["result"]["fitting_plot"] if task["status"] == "completed" and task["result"] else None,
-            "individual_plots": task["result"]["individual_plots"] if task["status"] == "completed" and task["result"] else None,
-            # 如果任务失败，添加错误信息
-            "error": task["error"] if task["status"] == "failed" else None
+            "queue_position": queue_position,  # 队列位置：0=正在运行，>0=排队中，-1=不在队列
         }
+        
+        # 如果任务完成，添加结果（使用result对象，与前端期望的格式一致）
+        if task["status"] == "completed" and task["result"]:
+            response["result"] = task["result"]
+        else:
+            response["result"] = None
+        
+        # 如果任务失败，添加错误信息
+        if task["status"] == "failed":
+            response["error"] = task["error"]
+        else:
+            response["error"] = None
+            
+        return response
     return {"success": False, "error": "Task not found"}
+
+
+def get_service_status() -> Dict[str, Any]:
+    """获取服务状态"""
+    with service.queue_lock:
+        return {
+            "success": True,
+            "is_busy": service.is_busy(),
+            "max_concurrent_tasks": service.max_concurrent_tasks,
+            "running_tasks": list(service.running_task_ids),
+            "running_count": len(service.running_task_ids),
+            "available_slots": service.get_available_slots(),
+            "queue_length": len(service.task_queue),
+            "queued_tasks": list(service.task_queue)
+        }
 
 def list_all_tasks() -> Dict[str, Any]:
     """列出所有任务"""

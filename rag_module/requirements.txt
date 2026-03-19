@@ -1,0 +1,28 @@
+# RAG 知识库依赖（导入 + 检索）。本地和云服务器部署前需安装：
+#   pip install -r rag_module/requirements.txt
+# 若报错找不到 llama-index>=0.10.0，多半是 pip 源太旧，请用官方源：
+#   pip install -i https://pypi.org/simple/ -r rag_module/requirements.txt
+# 或先升级 pip：python3 -m pip install --upgrade pip
+
+# 核心（0.10+ 需从 PyPI 官方或较新镜像拉取）
+llama-index>=0.10.0
+qdrant-client>=1.7.0
+llama-index-vector-stores-qdrant
+llama-index-embeddings-huggingface
+llama-index-llms-openai
+llama-index-readers-file
+sentence-transformers
+
+# 配置与文档解析
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+python-pptx>=0.6.0
+pandas>=2.0.0
+openpyxl>=3.0.0
+pdfplumber>=0.10.0
+
+# 可选：扫描版 PDF 用 OCR（云上如需再装）
+# 系统需先安装：yum install -y tesseract tesseract-langpack-chi-sim poppler-utils
+pdf2image
+pytesseract
+pillow

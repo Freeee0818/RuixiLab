@@ -9,7 +9,10 @@
 import os
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
+
+# 项目根目录（GuideLab 目录，与 config 平级），本地和云上均按此相对位置解析
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class Settings(BaseSettings):
@@ -54,24 +57,30 @@ class Settings(BaseSettings):
         description="学校API模型"
     )
     
-    # 自定义API配置
+    # 自定义API配置（支持 DeepSeek、Qwen3、OpenAI 等 OpenAI 兼容接口）
     AI_API_BASE_URL: str = Field(
-        default="https://api.deepseek.com",
-        description="AI API基础URL"
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        description="AI API基础URL（Qwen3 用 DashScope 兼容模式）"
     )
     AI_API_KEY: str = Field(
         default="",
-        description="AI API密钥（必需）"
+        description="AI API密钥（DashScope 在阿里云控制台获取）"
     )
     AI_API_MODEL: str = Field(
-        default="deepseek-chat",
-        description="AI API模型"
+        default="qwen3-max",
+        description="AI API模型（如 qwen3-max、qwen3.5-plus、deepseek-chat 等）"
     )
     
     # AI响应配置
     AI_MAX_TOKENS: int = Field(default=2000, description="AI最大生成令牌数")
     AI_TEMPERATURE: float = Field(default=0.7, description="AI温度参数")
     AI_TIMEOUT: float = Field(default=30.0, description="AI请求超时时间（秒）")
+    # Qwen/DashScope 深度思考模式（开启后模型先推理再回答，响应更慢但复杂任务更准）
+    AI_ENABLE_THINKING: bool = Field(default=True, description="是否开启深度思考模式")
+    AI_ENABLE_THINKING: bool = Field(
+        default=True,
+        description="开启深度思考模式（Qwen/DashScope 支持，提升复杂推理质量）"
+    )
     
     # ============= 数据存储配置 =============
     DATA_DIR: str = Field(default="data", description="数据根目录")
@@ -79,9 +88,26 @@ class Settings(BaseSettings):
     OUTPUTS_DIR: str = Field(default="data/outputs", description="输出文件目录")
     PLOTS_DIR: str = Field(default="data/outputs/plots", description="图表目录")
     
+    # ============= RAG知识库配置 =============
+    KNOWLEDGE_BASE_DIR: str = Field(default="knowledge_base", description="知识库根目录")
+    RAG_RAW_DIR: str = Field(default="knowledge_base/raw_docs", description="原始文档目录")
+    RAG_PARSED_DIR: str = Field(default="knowledge_base/parsed_docs", description="解析后文档目录")
+    RAG_META_DIR: str = Field(default="knowledge_base/experiment_meta", description="实验元数据目录")
+    RAG_VECTOR_DIR: str = Field(default="knowledge_base/vector_store", description="向量数据库目录")
+    
+    # ============= RAG模型配置 =============
+    RAG_EMBEDDING_MODEL: str = Field(default="BAAI/bge-m3", description="嵌入模型名称")
+    RAG_RERANK_MODEL: str = Field(default="BAAI/bge-reranker-v2-m3", description="重排模型名称")
+    RAG_TOP_K: int = Field(default=5, description="检索Top K数量")
+    RAG_SIMILARITY_THRESHOLD: float = Field(default=0.5, description="相似度阈值")
+    
     # ============= PySR配置 =============
     PYSR_OUTPUT_DIR: str = Field(default="pysr_module/output", description="PySR输出目录")
     PYSR_PLOTS_DIR: str = Field(default="pysr_module/output/plots", description="PySR图表目录")
+    PYSR_MAX_CONCURRENT_TASKS: int = Field(
+        default=3,
+        description="PySR最大并发任务数（根据服务器CPU和内存配置，建议2-4个）"
+    )
     
     # ============= 日志配置 =============
     LOG_LEVEL: str = Field(default="INFO", description="日志级别")
@@ -97,13 +123,25 @@ class Settings(BaseSettings):
     TASK_CLEANUP_DAYS: int = Field(default=7, description="任务清理天数")
     
     class Config:
-        # 自动找到项目根目录的 .env 文件
-        _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        env_file = os.path.join(_project_root, ".env")
+        env_file = os.path.join(PROJECT_ROOT, ".env")
         env_file_encoding = "utf-8"
         case_sensitive = True
         extra = "ignore"  # 忽略额外的环境变量
-    
+
+    @model_validator(mode="after")
+    def _resolve_project_paths(self) -> "Settings":
+        """将相对路径解析为基于项目根目录的绝对路径，便于本地与云上同一套配置"""
+        for attr in (
+            "DATA_DIR", "UPLOADS_DIR", "OUTPUTS_DIR", "PLOTS_DIR",
+            "KNOWLEDGE_BASE_DIR", "RAG_RAW_DIR", "RAG_PARSED_DIR",
+            "RAG_META_DIR", "RAG_VECTOR_DIR",
+            "PYSR_OUTPUT_DIR", "PYSR_PLOTS_DIR", "LOG_DIR", "LOG_FILE",
+        ):
+            value = getattr(self, attr, None)
+            if value and not os.path.isabs(value):
+                object.__setattr__(self, attr, os.path.normpath(os.path.join(PROJECT_ROOT, value)))
+        return self
+
     def get_ai_config(self) -> dict:
         """获取当前使用的AI配置"""
         if self.USE_SCHOOL_API:
@@ -114,6 +152,7 @@ class Settings(BaseSettings):
                 "max_tokens": self.AI_MAX_TOKENS,
                 "temperature": self.AI_TEMPERATURE,
                 "timeout": self.AI_TIMEOUT,
+                "enable_thinking": getattr(self, "AI_ENABLE_THINKING", False),
             }
         else:
             return {
@@ -123,6 +162,7 @@ class Settings(BaseSettings):
                 "max_tokens": self.AI_MAX_TOKENS,
                 "temperature": self.AI_TEMPERATURE,
                 "timeout": self.AI_TIMEOUT,
+                "enable_thinking": self.AI_ENABLE_THINKING,
             }
     
     def validate_ai_config(self) -> None:
@@ -147,6 +187,11 @@ class Settings(BaseSettings):
             self.PYSR_OUTPUT_DIR,
             self.PYSR_PLOTS_DIR,
             self.LOG_DIR,
+            self.KNOWLEDGE_BASE_DIR,
+            self.RAG_RAW_DIR,
+            self.RAG_PARSED_DIR,
+            self.RAG_META_DIR,
+            self.RAG_VECTOR_DIR,
         ]
         for directory in directories:
             os.makedirs(directory, exist_ok=True)

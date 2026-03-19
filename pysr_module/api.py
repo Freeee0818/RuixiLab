@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
 
 # 导入PySR服务
-from pysr_service import service, create_regression_task, start_regression_task, get_task_status, list_all_tasks
+from pysr_service import service, create_regression_task, start_regression_task, get_task_status, list_all_tasks, get_service_status
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -196,15 +196,28 @@ async def submit_task(
 @app.get("/tasks/{task_id}")
 async def get_task(task_id: str):
     """获取任务状态"""
-    task = service.get_task(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    task_status = get_task_status(task_id)
+    if not task_status.get("success", False):
+        raise HTTPException(status_code=404, detail=task_status.get("error", "Task not found"))
+    return task_status
 
 @app.get("/tasks")
 async def list_tasks():
     """列出所有任务"""
     return {"tasks": service.list_tasks()}
+
+@app.get("/service-status")
+async def service_status():
+    """获取服务状态（是否繁忙、队列长度等）"""
+    return get_service_status()
+
+@app.get("/tasks/{task_id}/equation/{equation_index}/plot")
+async def get_equation_plot(task_id: str, equation_index: int):
+    """按需生成指定方程的图表（用户点击某个方程时调用）"""
+    plot_data = service.generate_equation_plot(task_id, equation_index)
+    if plot_data is None:
+        raise HTTPException(status_code=404, detail="无法生成图表，任务不存在或方程索引无效")
+    return {"success": True, "plot": plot_data}
 
 @app.post("/analyze_experiment")
 async def analyze_experiment(input_data: ExperimentInput):
@@ -349,8 +362,7 @@ async def analyze_experiment(input_data: ExperimentInput):
         # 检查模型是否支持视觉输入（通过模型名称判断）
         model_name = AI_CONFIG["model"].lower()
         supports_vision = any(keyword in model_name for keyword in [
-            "vision", "gpt-4", "claude-3", "claude-3.5", "gemini-pro-vision", 
-            "gemini-1.5", "qwen-vl", "deepseek-vl"
+            "qwen-plus"
         ])
         
         # 如果有图像且模型支持视觉，使用多模态格式
@@ -382,6 +394,9 @@ async def analyze_experiment(input_data: ExperimentInput):
             "max_tokens": AI_CONFIG["max_tokens"],
             "stream": True
         }
+        # Qwen/DashScope 深度思考模式
+        if AI_CONFIG.get("enable_thinking"):
+            request_data["enable_thinking"] = True
 
         async def generate_stream():
             print("开始生成流式响应...")
@@ -421,15 +436,15 @@ async def analyze_experiment(input_data: ExperimentInput):
                                 
                                 if data.get("choices") and len(data["choices"]) > 0:
                                     choice = data["choices"][0]
+                                    delta = choice.get("delta", {})
                                     # 兼容不同API的delta结构
-                                    content = ""
-                                    if "delta" in choice and "content" in choice["delta"]:
-                                        content = choice["delta"]["content"]
-                                    elif "message" in choice and "content" in choice["message"]:
-                                        content = choice["message"]["content"]
-                                    # 只要有内容就yield
+                                    content = delta.get("content") or choice.get("message", {}).get("content") or ""
+                                    reasoning = delta.get("reasoning_content") or ""  # 深度思考模式的推理过程
+                                    # 思考内容（若有）先输出，前端可区分展示
+                                    if reasoning:
+                                        yield f"data: {json.dumps({'type': 'thinking', 'content': reasoning})}\n\n"
+                                    # 正式回答内容
                                     if content:
-                                        # print(f"发送内容: {content}")
                                         yield f"data: {json.dumps({'content': content})}\n\n"
                                     # 结束信号
                                     if choice.get("finish_reason") == "stop" or choice.get("stop_reason") == "stop":
