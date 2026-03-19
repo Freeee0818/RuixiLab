@@ -1,188 +1,153 @@
 # 睿析实验平台
 
-一个创新的物理实验智能分析平台，集成了符号回归分析和AI助手功能，旨在帮助学生和教师更好地理解和分析物理实验数据，发现数据背后的物理规律。
+面向物理实验的智能分析平台，集成 **RAG 知识库增强**、符号回归与 AI 助教，帮助学生从实验数据中发现物理规律。
 
-## 🌟 特色功能
+---
 
-### 1. 睿析实验（符号回归分析）
-睿析实验是本平台的核心功能，它通过先进的符号回归技术，帮助用户从实验数据中自动发现潜在的数学关系和物理规律。
+## 📚 核心特色：RAG 知识库增强
 
-主要特点：
-- 🔍 **自动发现数学关系**：利用PySR（Python Symbolic Regression）技术，自动从实验数据中发现数学表达式
-- 📊 **数据可视化**：直观展示数据拟合结果和模型复杂度分析
-- 🧮 **多模型对比**：自动生成多个候选模型，并按照复杂度和准确度进行排序
-- 🤖 **AI辅助分析**：结合大语言模型，提供专业的物理解释和实验分析
-- 📈 **实时反馈**：动态展示分析进度和结果
+本平台采用 **RAG（Retrieval Augmented Generation）** 技术，让 AI 助手在回答前先从本地知识库检索相关资料，提升回答的准确性和可追溯性。
 
-### 2. 其他功能模块
-- 🎯 **虚拟实验室**：提供在线物理实验模拟环境
-- 🧭 **学习路径**：个性化的物理学习规划
-- 📚 **资源中心**：丰富的物理实验资料库
-- 📝 **评估系统**：实验报告智能评估
+| 能力 | 说明 |
+|------|------|
+| **智能检索** | 基于 BAAI/bge-m3 嵌入模型，对物理实验文档进行语义检索 |
+| **多格式支持** | 支持 PDF、Word、Excel、TXT、PPT 等，自动解析与分块 |
+| **向量存储** | 使用 Qdrant 本地向量库，无需额外云服务 |
+| **RAG 增强对话** | 分析页 AI 助教先检索知识库，再结合 LLM 生成回答 |
+| **深度思考模式** | 支持 Qwen 等模型的 `enable_thinking`，复杂问题更准 |
+
+**知识库目录结构：**
+```
+knowledge_base/
+├── raw_docs/        # 原始文档（PDF、Word 等）
+├── vector_store/    # 向量化索引（Qdrant）
+└── experiment_meta/ # 实验元数据描述
+```
+
+**首次或更新知识库时运行：**
+```bash
+python scripts/ingest_knowledge.py
+```
+
+云服务器部署详见 [docs/ALIYUN_RAG_DEPLOYMENT.md](docs/ALIYUN_RAG_DEPLOYMENT.md)。
+
+---
+
+## 🌟 功能概览
+
+### 1. PySR 符号回归
+- 从实验数据中**自动发现**数学表达式
+- 基于 PySR 引擎，多候选模型、复杂度与准确度排序
+- 数据可视化、拟合曲线、异常检测
+
+### 2. AI 助教（RAG + LLM）
+- **RAG 检索**：从知识库获取相关实验资料
+- **LLM 回答**：支持 DeepSeek、Qwen、学校 API 等
+- **深度思考**：可开启 `enable_thinking` 提升推理质量
+- 公式分析、图表解读、实验建议
+
+### 3. 数据分析
+- 散点、折线、柱状、箱线、热力图
+- 相关系数、趋势分析、统计摘要
+
+### 4. 数据采集
+- Phyphox、Tracker、LabVIEW 等工具指引
+- 智慧课程、虚拟实验入口
+
+---
 
 ## 🚀 快速开始
 
 ### 环境要求
-- Python 3.8+
+- Python 3.10+
 - Node.js 16+
-- npm 8+
+- Julia（PySR 依赖）
+- 可选：GPU（加速 RAG Embedding）
 
-### 一键初始化（推荐）
-
-使用项目提供的初始化脚本自动设置环境：
-
+### 1. 克隆与初始化
 ```bash
-# 克隆项目
 git clone [项目地址]
 cd GuideLab
 
-# 运行初始化脚本
+# 一键初始化
 python scripts/setup.py
 ```
 
-初始化脚本会自动：
-- 创建Python虚拟环境
-- 安装所有Python依赖
-- 安装前端依赖
-- 创建环境变量配置文件
-
-### 手动安装
-
-1. **配置环境变量**
+### 2. 配置 `.env`
 ```bash
-# 复制环境变量模板
 cp env.example .env
-
-# 编辑.env文件，填入API密钥等配置
-# 重要：必须配置AI_API_KEY或SCHOOL_API_KEY
+# 编辑 .env，至少配置：
+# AI_API_KEY=sk-xxx          # 或 SCHOOL_API_KEY
+# AI_API_BASE_URL=...        # 如 DashScope 兼容地址
+# AI_API_MODEL=qwen-plus     # 或 deepseek-chat 等
+# AI_ENABLE_THINKING=true    # 是否开启深度思考
 ```
 
-2. **安装Python依赖**
+### 3. 初始化 RAG 知识库（可选）
 ```bash
-# 创建虚拟环境（推荐）
-python -m venv venv
-
-# 激活虚拟环境
-# Windows:
-venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
-
-# 安装依赖
-pip install -r pysr_module/requirements.txt
-pip install -r src/server/requirements.txt
-pip install python-dotenv  # 用于加载.env文件
+# 将文档放入 knowledge_base/raw_docs/
+# 执行向量化
+python scripts/ingest_knowledge.py
 ```
 
-3. **安装前端依赖**
+### 4. 启动服务
 ```bash
-npm install
-```
-
-4. **启动服务**
-
-```bash
-# 启动后端服务（使用统一启动脚本）
+# 后端（PySR + RAG + 分析）
 python scripts/start_backend.py
+# 或: python -m pysr_module.main
 
-# 或直接启动（在pysr_module目录下）
-cd pysr_module
-python main.py
-
-# 启动前端开发服务器（在项目根目录下）
+# 前端
 npm run dev
 ```
 
-### 迁移旧数据（可选）
-
-如果是从旧版本升级，可以运行迁移脚本：
-
-```bash
-python scripts/migrate_outputs.py
-```
-
-## 💡 睿析实验使用指南
-
-### 数据准备
-1. 准备CSV格式的实验数据文件
-2. 数据文件应包含自变量和因变量列
-3. 确保数据格式正确，无缺失值
-
-### 分析流程
-1. 上传数据文件
-2. 选择要分析的变量列
-3. 设置分析参数（可选）
-4. 启动分析
-5. 等待分析完成，查看结果
-6. 使用AI助手解释结果
-
-### 结果解读
-- **拟合曲线**：展示数据点和模型预测的拟合情况
-- **复杂度分析**：显示不同模型的复杂度和准确度权衡
-- **数学表达式**：给出发现的数学关系的解析式
-- **AI解释**：提供专业的物理解释和实验分析建议
+---
 
 ## 🛠️ 技术架构
 
-### 前端技术栈
-- Vue 3：现代化的响应式框架
-- Element Plus：UI组件库
-- ECharts：数据可视化
-- Axios：HTTP客户端
-
-### 后端技术栈
-- FastAPI：高性能Web框架
-- PySR：符号回归引擎
-- Sentence Transformers：文本处理
-- 大语言模型集成：提供智能分析
-
-## 📝 开发指南
+| 模块 | 技术 |
+|------|------|
+| **RAG** | LlamaIndex、BAAI/bge-m3、Qdrant、OpenAI 兼容 LLM |
+| **符号回归** | PySR、Julia |
+| **后端** | FastAPI、FastAPI、uvicorn |
+| **前端** | Vue 3、Element Plus、ECharts |
+| **配置** | pydantic-settings、python-dotenv |
 
 ### 目录结构
-
-详细的项目结构说明请参考 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
-
-主要目录：
 ```
 GuideLab/
-├── config/            # 配置模块（环境变量、路径等）
-├── pysr_module/       # PySR后端服务
-│   ├── api.py         # FastAPI路由
-│   ├── main.py        # 服务入口
-│   └── pysr_service.py # 核心服务逻辑
-├── src/               # 前端源代码
-│   ├── components/    # Vue组件
-│   ├── views/         # 页面视图
-│   └── utils/         # 工具函数
-├── scripts/           # 脚本目录
-│   ├── setup.py       # 初始化脚本
-│   └── start_backend.py # 启动脚本
-├── data/              # 数据目录（统一管理）
-│   ├── outputs/       # 分析结果
-│   └── uploads/       # 上传文件
-├── logs/              # 日志文件
-├── tests/             # 测试目录
-└── docs/              # 文档目录
+├── config/              # 统一配置
+├── rag_module/          # RAG 服务（ingestion + service）
+├── pysr_module/         # PySR 符号回归服务
+├── analysis_module/     # 数据分析服务
+├── knowledge_base/      # RAG 知识库
+│   ├── raw_docs/        # 原始文档
+│   └── vector_store/    # 向量索引
+├── src/                 # Vue 前端
+├── scripts/             # ingest_knowledge、setup 等
+└── docs/                # 部署与说明文档
 ```
 
-### 配置管理
+---
 
-所有配置通过环境变量管理，配置文件为 `.env`（从 `env.example` 复制）。
+## 📝 常用命令
 
-**重要配置项：**
-- `AI_API_KEY`: AI助手API密钥（必需）
-- `USE_SCHOOL_API`: 是否使用学校API
-- `CORS_ORIGINS`: 允许的前端域名（生产环境必须配置）
+| 用途 | 命令 |
+|------|------|
+| RAG 向量化 | `python scripts/ingest_knowledge.py` |
+| RAG 测试 | `python scripts/test_rag.py "你的问题"` |
+| 强制重新导入 | `python scripts/ingest_knowledge.py --force` |
 
-### 安全注意事项
+---
 
-1. **API密钥**: 永远不要将 `.env` 文件提交到版本控制
-2. **CORS配置**: 生产环境必须限制允许的源
-3. **日志文件**: 可能包含敏感信息，已加入 `.gitignore`
+## 📄 相关文档
 
-### 开发流程
+- [阿里云 RAG 部署指南](docs/ALIYUN_RAG_DEPLOYMENT.md)
+- [SETUP_CONFIG.md](SETUP_CONFIG.md) - 详细配置说明
 
-1. 创建功能分支
-2. 修改代码
-3. 测试功能
-4. 提交代码（确保 `.env` 未被提交）
+---
+
+## ⚠️ 注意事项
+
+- `.env` 含 API Key，请勿提交到版本控制
+- 生产环境需正确配置 `CORS_ORIGINS`
+- RAG 首次启动会下载 BAAI/bge-m3（约 2GB），国内建议设置 `HF_ENDPOINT=https://hf-mirror.com`
