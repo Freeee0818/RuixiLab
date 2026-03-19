@@ -29,8 +29,6 @@ knowledge_base/
 python scripts/ingest_knowledge.py
 ```
 
-云服务器部署详见 [docs/ALIYUN_RAG_DEPLOYMENT.md](docs/ALIYUN_RAG_DEPLOYMENT.md)。
-
 ---
 
 ## 🌟 功能概览
