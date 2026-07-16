@@ -24,16 +24,16 @@
             <div class="chart-preview">
               <h4>拟合效果</h4>
               <div class="chart-placeholder">
-                <img 
-                  v-if="chartImage" 
-                  :src="chartImage" 
-                  alt="拟合图表"
-                  class="preview-chart"
-                />
-                <div v-else class="chart-loading">
-                  <i class="el-icon-loading"></i>
-                  <p>加载图表中...</p>
-                </div>
+                <svg viewBox="0 0 640 260" role="img" aria-label="大角度单摆拟合曲线">
+                  <path class="case-grid" d="M45 35H610M45 95H610M45 155H610M45 215H610M145 20V230M265 20V230M385 20V230M505 20V230" />
+                  <path class="case-fit" d="M55 205C140 196 182 172 240 160S345 132 402 98 510 54 600 36" />
+                  <g class="case-points">
+                    <circle cx="75" cy="204" r="6"/><circle cx="155" cy="187" r="6"/>
+                    <circle cx="236" cy="163" r="6"/><circle cx="323" cy="138" r="6"/>
+                    <circle cx="405" cy="101" r="6"/><circle cx="498" cy="65" r="6"/>
+                    <circle cx="580" cy="42" r="6"/>
+                  </g>
+                </svg>
               </div>
             </div>
 
@@ -82,7 +82,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -91,7 +91,6 @@ export default {
   
   setup() {
     const router = useRouter()
-    const chartImage = ref('/example1.png')
     // 从实际数据文件中提取的前10行数据
     const sampleData = ref([
       { theta: 0.9987, T: 2.2730 },
@@ -135,7 +134,6 @@ export default {
 
     return {
       sampleData,
-      chartImage,
       handleStartWithSample,
       handleViewDetails,
     }
@@ -362,6 +360,29 @@ export default {
   overflow: hidden;
 }
 
+.chart-placeholder svg {
+  width: 100%;
+  height: auto;
+  padding: 18px;
+}
+
+.case-grid {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 1;
+}
+
+.case-fit {
+  fill: none;
+  stroke: #266fdc;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.case-points {
+  fill: #0f9d70;
+}
+
 .preview-chart {
   max-width: 100%;
   height: auto;
@@ -419,4 +440,3 @@ export default {
   }
 }
 </style>
-

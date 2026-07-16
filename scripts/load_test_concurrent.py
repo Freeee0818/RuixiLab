@@ -108,9 +108,9 @@ async def submit_one(
                 status = data_status.get("status") or data_status.get("task_status")
                 result["task_status"] = status
 
-                if status in {"completed", "failed"}:
+                if status in {"completed", "failed", "cancelled"}:
                     result["elapsed"] = round(time.perf_counter() - start, 3)
-                    if status == "failed":
+                    if status in {"failed", "cancelled"}:
                         result["error"] = data_status.get("error") or data_status.get("status_message")
                     break
 

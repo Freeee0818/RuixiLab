@@ -9,6 +9,3 @@
 from .settings import settings
 
 __all__ = ["settings"]
-
-# 初始化：确保必需的目录存在
-settings.ensure_directories()

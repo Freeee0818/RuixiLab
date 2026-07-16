@@ -1,0 +1,10 @@
+# AI 问答/RAG/Agent 服务依赖；不包含 PySR、Julia、SciPy 或 Matplotlib。
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+httpx>=0.25.0
+
+# RAG 检索能力（LlamaIndex、Qdrant、Embedding）。
+-r ../rag_module/requirements.txt

@@ -69,7 +69,7 @@
                     </div>
                     
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <div class="mb-3">
                                 <label class="form-label">二元运算符</label>
                                 <div class="form-check">
@@ -87,28 +87,6 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" value="/" id="op-div" checked>
                                     <label class="form-check-label" for="op-div">除法 (/)</label>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">一元运算符</label>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="exp" id="op-exp" checked>
-                                    <label class="form-check-label" for="op-exp">指数 (exp)</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="log" id="op-log" checked>
-                                    <label class="form-check-label" for="op-log">对数 (log)</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="sin" id="op-sin" checked>
-                                    <label class="form-check-label" for="op-sin">正弦 (sin)</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="cos" id="op-cos" checked>
-                                    <label class="form-check-label" for="op-cos">余弦 (cos)</label>
                                 </div>
                             </div>
                         </div>
@@ -203,8 +181,7 @@
                 population_size: parseInt(document.getElementById('populationSize').value),
                 niterations: parseInt(document.getElementById('iterations').value),
                 maxsize: parseInt(document.getElementById('maxsize').value),
-                binary_operators: getSelectedOperators('op-add', 'op-sub', 'op-mul', 'op-div'),
-                unary_operators: getSelectedOperators('op-exp', 'op-log', 'op-sin', 'op-cos')
+                binary_operators: getSelectedOperators('op-add', 'op-sub', 'op-mul', 'op-div')
             };
             
             formData.append('params', JSON.stringify(parameters));
@@ -345,4 +322,4 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-</html> 
+</html>

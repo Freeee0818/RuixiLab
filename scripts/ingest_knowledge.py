@@ -19,10 +19,12 @@ from dotenv import load_dotenv
 load_dotenv(project_root / ".env")
 
 def main():
-    raw_dir = project_root / "knowledge_base" / "raw_docs"
+    from config import settings
+
+    raw_dir = Path(settings.RAG_RAW_DIR)
     if not raw_dir.exists():
-        print(f"请先在项目下创建目录并放入文档：{raw_dir}")
-        print("例如：knowledge_base/raw_docs/你的文档.pdf")
+        print(f"请先创建目录并放入文档：{raw_dir}")
+        print(f"例如：{raw_dir / '你的文档.pdf'}")
         sys.exit(1)
 
     print("正在初始化 RAG 服务（首次会下载 Embedding 模型，请稍候）...")
@@ -34,17 +36,13 @@ def main():
     args = p.parse_args()
 
     ingestor.ingest_all_formats(force_reimport=args.force)
-    print("导入完成。可用 scripts/test_rag.py 测试检索效果。")
+    print("导入完成。可用 scripts/test_rag.py --compare 测试四种检索链路。")
     if not (raw_dir / ".ingestion_index.json").exists() or len(ingestor.file_index) == 0:
         print("提示：当前未导入任何文档。请将 PDF、Word、TXT 等放入 knowledge_base/raw_docs 后重新运行本脚本。")
 
     # 显式关闭 Qdrant 客户端，避免退出时报 "Exception ignored in: QdrantClient.__del__"
     from rag_module.service import rag_service
-    if getattr(rag_service, "client", None) is not None:
-        try:
-            rag_service.client.close()
-        except Exception:
-            pass
+    rag_service.close()
 
 if __name__ == "__main__":
     main()

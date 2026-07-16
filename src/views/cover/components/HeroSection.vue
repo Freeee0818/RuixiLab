@@ -27,87 +27,78 @@
           </button>
         </div>
       </div>
-      
-      <div class="hero-video-container">
-        <video
-          ref="videoPlayer"
-          class="hero-video"
-          autoplay
-          muted
-          loop
-          playsinline
-          @loadeddata="onVideoLoaded"
-        >
-          <source :src="videoSrc" type="video/mp4" />
-          您的浏览器不支持视频播放
-        </video>
-        <div class="video-overlay"></div>
+
+      <div class="hero-workbench" aria-label="GuideLab 分析工作台预览">
+        <div class="preview-toolbar">
+          <span></span><span></span><span></span>
+          <strong>GuideLab Workbench</strong>
+        </div>
+        <div class="preview-body">
+          <section>
+            <small>EXPERIMENT</small>
+            <h3>实验数据分析</h3>
+            <svg viewBox="0 0 280 150" role="img" aria-label="实验数据拟合曲线">
+              <path class="grid-line" d="M20 25H265M20 65H265M20 105H265M65 15V130M125 15V130M185 15V130M245 15V130" />
+              <path class="fit-line" d="M25 118C68 112 85 92 116 85S168 73 196 48 231 31 260 24" />
+              <g class="data-points">
+                <circle cx="34" cy="116" r="4"/><circle cx="72" cy="105" r="4"/>
+                <circle cx="111" cy="87" r="4"/><circle cx="151" cy="78" r="4"/>
+                <circle cx="194" cy="51" r="4"/><circle cx="231" cy="34" r="4"/>
+              </g>
+            </svg>
+          </section>
+          <section class="agent-preview">
+            <small>AGENT</small>
+            <h3>工具协同</h3>
+            <p><i></i>知识库混合检索</p>
+            <p><i></i>实验数据诊断</p>
+            <p><i></i>PySR 符号回归</p>
+          </section>
+        </div>
       </div>
     </div>
   </section>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 export default {
   name: 'HeroSection',
-  
+
   emits: ['start-analysis'],
-  
+
   setup(props, { emit }) {
     const router = useRouter()
-    const videoPlayer = ref(null)
-    const videoSrc = ref('/videos/promo.mp4')
-    
     const handleStartAnalysis = () => {
       emit('start-analysis')
     }
-    
+
     const handleDataCollection = () => {
       router.push('/data-collection')
     }
-    
+
     const handleVirtualLab = () => {
       window.open('http://10.161.25.80:8000', '_blank')
     }
-    
+
     const handleSmartCourse = () => {
       window.open('http://t.zhihuishu.com/NaXDze0e', '_blank')
     }
-    
+
     const scrollToFeatures = () => {
       const featuresSection = document.getElementById('features')
       if (featuresSection) {
         featuresSection.scrollIntoView({ behavior: 'smooth' })
       }
     }
-    
-    const onVideoLoaded = () => {
-      if (videoPlayer.value) {
-        videoPlayer.value.play().catch(err => {
-          console.warn('视频自动播放失败:', err)
-        })
-      }
-    }
-    
-    onMounted(() => {
-      if (videoPlayer.value) {
-        videoPlayer.value.loop = true
-        videoPlayer.value.muted = true
-      }
-    })
-    
+
     return {
-      videoPlayer,
-      videoSrc,
       handleStartAnalysis,
       handleDataCollection,
       handleVirtualLab,
       handleSmartCourse,
       scrollToFeatures,
-      onVideoLoaded,
     }
   },
 }
@@ -201,29 +192,105 @@ export default {
   color: #1f2937;
 }
 
-.hero-video-container {
+.hero-workbench {
   position: relative;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  border: 1px solid #dbe4f2;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(31, 47, 77, 0.12);
   animation: fadeInRight 0.8s ease-out;
 }
 
-.hero-video {
-  width: 100%;
-  height: auto;
-  display: block;
-  background: #f3f4f6;
+.preview-toolbar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px;
+  color: #526079;
+  border-bottom: 1px solid #e4eaf3;
+  background: #f8fafc;
 }
 
-.video-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
-  pointer-events: none;
+.preview-toolbar span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b8c4d6;
+}
+
+.preview-toolbar strong {
+  margin-left: 7px;
+  font-size: 12px;
+}
+
+.preview-body {
+  min-height: 330px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.preview-body section {
+  min-width: 0;
+  padding: 28px 22px;
+}
+
+.preview-body section + section {
+  border-left: 1px solid #e4eaf3;
+}
+
+.preview-body small {
+  color: #266fdc;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+
+.preview-body h3 {
+  margin: 8px 0 20px;
+  color: #172033;
+  font-size: 17px;
+}
+
+.preview-body svg {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.grid-line {
+  fill: none;
+  stroke: #e6ebf3;
+  stroke-width: 1;
+}
+
+.fit-line {
+  fill: none;
+  stroke: #266fdc;
+  stroke-width: 3;
+}
+
+.data-points {
+  fill: #0f9d70;
+}
+
+.agent-preview p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 13px 0;
+  padding: 12px;
+  color: #526079;
+  font-size: 13px;
+  border: 1px solid #e4eaf3;
+  border-radius: 8px;
+}
+
+.agent-preview i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0f9d70;
 }
 
 @keyframes fadeInLeft {
@@ -255,7 +322,7 @@ export default {
     gap: 40px;
   }
 
-  .hero-video-container {
+  .hero-workbench {
     order: -1;
   }
 
@@ -283,6 +350,10 @@ export default {
 
   .hero-description {
     font-size: 16px;
+  }
+
+  .preview-body {
+    min-height: 280px;
   }
 }
 </style>

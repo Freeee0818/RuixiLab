@@ -8,8 +8,8 @@ if exist venv\Scripts\activate.bat (
     call venv\Scripts\activate.bat
 )
 
-REM 启动服务
-python scripts\start_backend.py
+REM 启动计算服务（绘图 + PySR）
+python -m analysis_module.main
 
 pause
 

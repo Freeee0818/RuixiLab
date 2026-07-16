@@ -4,14 +4,14 @@
 #   pip install -i https://pypi.org/simple/ -r rag_module/requirements.txt
 # 或先升级 pip：python3 -m pip install --upgrade pip
 
-# 核心（0.10+ 需从 PyPI 官方或较新镜像拉取）
-llama-index>=0.10.0
-qdrant-client>=1.7.0
-llama-index-vector-stores-qdrant
-llama-index-embeddings-huggingface
-llama-index-llms-openai
-llama-index-readers-file
-sentence-transformers
+# 解析、混合向量与重排。限制主版本，避免云端安装时 API 漂移。
+llama-index-core>=0.14,<0.15
+llama-index-readers-file>=0.5,<0.6
+qdrant-client>=1.17,<2
+FlagEmbedding>=1.4,<2
+# FlagEmbedding 的 encoder-only reranker 仍调用 tokenizer.prepare_for_model；
+# Transformers v5 调整了该接口，会让 bge-reranker-v2-m3 在重排时报错。
+transformers>=4.44.2,<5
 
 # 配置与文档解析
 pydantic-settings>=2.0.0

@@ -7,7 +7,7 @@
       v-model="experimentInfo"
       :disabled="isLoading"
       :regression-result="regressionResult"
-      :data-file="dataFile"
+      :data-file="dataContext"
       @formula-selected="handleFormulaSelected"
       @analyze-formula="handleAnalyzeFormula"
       @analyze-chart="handleAnalyzeChart"
@@ -21,9 +21,12 @@
       :is-loading="isLoading"
       :streaming-message="streamingMessage"
       :streaming-thinking="streamingThinking"
+      :streaming-tools="streamingTools"
+      :streaming-tasks="streamingTasks"
       :is-streaming="isStreaming"
       :has-messages="hasMessages"
       :show-experiment-info="showExperimentInfo"
+      :data-context="dataContext"
       @send-message="handleSendMessage"
       @clear-messages="clearMessages"
       @regenerate="regenerateResponse"
@@ -33,7 +36,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, toRef } from 'vue'
 import { useRoute } from 'vue-router'
 import ExperimentInfo from './ExperimentInfo.vue'
 import ChatInterface from './ChatInterface.vue'
@@ -61,6 +64,10 @@ export default {
       type: Object,
       default: null,
     },
+    dataContext: {
+      type: Object,
+      default: null,
+    },
   },
   
   setup(props) {
@@ -72,9 +79,6 @@ export default {
       name: route?.query?.dataInfo || '',
       description: route?.query?.background || '',
     })
-    
-    // 数据文件信息
-    const dataFile = ref(null)
     
     // 控制实验信息显示/隐藏
     const showExperimentInfo = ref(false)
@@ -91,12 +95,14 @@ export default {
       isLoading,
       streamingMessage,
       streamingThinking,
+      streamingTools,
+      streamingTasks,
       isStreaming,
       hasMessages,
       sendMessage,
       clearMessages,
       regenerateResponse,
-    } = useChat(experimentInfo, apiKey, apiBaseUrl, modelName)
+    } = useChat(experimentInfo, apiKey, apiBaseUrl, modelName, toRef(props, 'dataContext'))
     
     // 处理发送消息
     const handleSendMessage = async () => {
@@ -237,13 +243,15 @@ export default {
     
     return {
       experimentInfo,
-      dataFile,
+      dataContext: toRef(props, 'dataContext'),
       showExperimentInfo,
       messages,
       currentInput,
       isLoading,
       streamingMessage,
       streamingThinking,
+      streamingTools,
+      streamingTasks,
       isStreaming,
       hasMessages,
       handleSendMessage,
@@ -288,4 +296,3 @@ export default {
   }
 }
 </style>
-

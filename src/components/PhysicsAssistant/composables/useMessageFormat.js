@@ -10,6 +10,13 @@ import 'katex/dist/katex.min.css'
 export function useMessageFormat() {
   let md = null
   let katex = null
+
+  const escapeHtml = (value) => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
   
   // 初始化Markdown和KaTeX
   onMounted(async () => {
@@ -95,7 +102,7 @@ export function useMessageFormat() {
   // 渲染消息内容
   const renderContent = (content) => {
     if (!content) return ''
-    if (!md) return content
+    if (!md) return escapeHtml(content)
     
     try {
       // 先转换 MathML 为 LaTeX
@@ -161,9 +168,9 @@ export function useMessageFormat() {
           } catch (e) {
             console.error('KaTeX 渲染失败:', e, formula)
             const regex = new RegExp(placeholder, 'g')
-            processed = processed.replace(
-              regex,
-              `<span class="math-error">${formula}</span>`
+              processed = processed.replace(
+                regex,
+                `<span class="math-error">${escapeHtml(formula)}</span>`
             )
           }
         })
@@ -182,7 +189,7 @@ export function useMessageFormat() {
       return processed
     } catch (error) {
       console.error('内容渲染失败:', error)
-      return content
+      return escapeHtml(content)
     }
   }
   
@@ -200,4 +207,3 @@ export function useMessageFormat() {
     getPlainText,
   }
 }
-

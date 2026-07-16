@@ -46,6 +46,9 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+release/
+*.zip
+*.tar.gz
 
 # ==================== 数据和输出文件 ====================
 .cache/
@@ -58,6 +61,14 @@ pysr_module/outputs/
 *.csv
 !src/assets/*.csv
 !public/*.csv
+knowledge_base/raw_docs/
+knowledge_base/parsed_docs/
+knowledge_base/vector_store/
+knowledge_base/model_cache/
+knowledge_base/experiment_meta/
+docs/test_doc.*
+docs/competition_doc.*
+docs/software_design_document.*
 
 # ==================== 临时文件 ====================
 *.tmp
@@ -67,6 +78,9 @@ pysr_module/outputs/
 *~
 .DS_Store
 Thumbs.db
+*.aux
+*.out
+*.toc
 
 # ==================== IDE和编辑器 ====================
 .vscode/*
@@ -83,6 +97,8 @@ Thumbs.db
 htmlcov/
 .pytest_cache/
 .tox/
+test-results/
+playwright-report/
 
 # ==================== 其他 ====================
 *.pyc

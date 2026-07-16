@@ -8,10 +8,10 @@
           class="logo-image"
         />
       </div>
-      <div class="header-actions">
+      <nav class="header-actions" aria-label="主导航">
         <router-link to="/" class="nav-item">首页</router-link>
-        <router-link to="/analysis" class="nav-item">分析</router-link>
-        <router-link to="/data-collection" class="nav-item">采集</router-link>
+        <router-link to="/analysis" class="nav-item">分析工作台</router-link>
+        <router-link to="/data-collection" class="nav-item">数据采集</router-link>
         <a href="http://10.161.25.80:8000" target="_blank" class="nav-item"
           >虚拟实验</a
         >
@@ -21,7 +21,7 @@
           class="nav-item"
           >智慧课程</a
         >
-      </div>
+      </nav>
     </div>
   </header>
 </template>
@@ -35,20 +35,21 @@ export default {
 <style scoped>
 .app-header {
   background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--gl-border);
+  box-shadow: 0 2px 12px rgba(31, 49, 82, 0.05);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1000;
-  padding: 12px 0;
+  height: 69px;
 }
 
 .header-container {
-  max-width: 1400px;
+  width: min(100%, 1504px);
+  height: 100%;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 32px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -61,56 +62,37 @@ export default {
 }
 
 .logo-image {
-  height: 60px;
+  width: min(390px, 38vw);
+  height: 46px;
   width: auto;
   object-fit: contain;
-  border-radius: 4px;
-}
-
-.logo-text {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.logo-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e40af;
-  line-height: 1.4;
-  margin-bottom: 2px;
-}
-
-.logo-subtitle {
-  font-size: 11px;
-  color: #3b82f6;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  line-height: 1.3;
+  border-radius: 2px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 28px;
 }
 
 .nav-item {
-  color: #4b5563;
+  color: var(--gl-text-secondary);
   text-decoration: none;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
   transition: color 0.2s;
-  padding: 8px 0;
+  padding: 27px 0 24px;
+  white-space: nowrap;
   position: relative;
 }
 
 .nav-item:hover {
-  color: #1e40af;
+  color: var(--gl-primary);
 }
 
 .nav-item.router-link-active {
-  color: #1e40af;
+  color: var(--gl-primary);
 }
 
 .nav-item.router-link-active::after {
@@ -119,49 +101,56 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: #1e40af;
-  border-radius: 2px;
+  height: 3px;
+  background: var(--gl-primary);
+  border-radius: 999px 999px 0 0;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .header-container {
-    padding: 0 16px;
-  }
-
-  .logo-image {
-    height: 50px;
-  }
-
-  .logo-title {
-    font-size: 14px;
-  }
-
-  .logo-subtitle {
-    font-size: 10px;
+    padding: 0 20px;
   }
 
   .header-actions {
-    gap: 16px;
-  }
-
-  .nav-item {
-    font-size: 14px;
+    gap: 18px;
   }
 }
 
-@media (max-width: 480px) {
-  .logo-text {
+@media (max-width: 720px) {
+  .app-header {
+    height: 98px;
+  }
+
+  .header-container {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 8px 16px 0;
+  }
+
+  .logo-section {
+    min-height: 39px;
+  }
+
+  .logo-image {
+    width: 230px;
+    height: 34px;
+  }
+
+  .header-actions {
+    width: 100%;
+    gap: 24px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .header-actions::-webkit-scrollbar {
     display: none;
   }
 
-  .logo-image {
-    height: 45px;
-  }
-
-  .header-actions {
-    gap: 12px;
+  .nav-item {
+    flex: 0 0 auto;
+    padding: 15px 0 13px;
+    font-size: 13px;
   }
 }
 </style>

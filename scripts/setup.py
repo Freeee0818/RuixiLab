@@ -58,10 +58,13 @@ def main():
     if (project_root / "requirements.txt").exists():
         run_command(f'"{pip_path}" install -r requirements.txt')
     
-    # 安装PySR模块依赖
-    pysr_requirements = project_root / "pysr_module" / "requirements.txt"
-    if pysr_requirements.exists():
-        run_command(f'"{pip_path}" install -r "{pysr_requirements}"')
+    # 本地一体开发环境安装两套服务依赖；生产环境建议按 README 分成两个 venv。
+    for requirements_file in (
+        project_root / "analysis_module" / "requirements.txt",
+        project_root / "ai_module" / "requirements.txt",
+    ):
+        if requirements_file.exists():
+            run_command(f'"{pip_path}" install -r "{requirements_file}"')
     
     # 安装服务器依赖
     server_requirements = project_root / "src" / "server" / "requirements.txt"
@@ -92,7 +95,7 @@ def main():
     # 6. 创建.env文件
     print("\n[6/6] 配置环境变量...")
     env_file = project_root / ".env"
-    env_example = project_root / "env.example"
+    env_example = project_root / ".env.example"
     
     if not env_file.exists() and env_example.exists():
         import shutil
@@ -101,14 +104,14 @@ def main():
     elif env_file.exists():
         print("✓ .env文件已存在")
     else:
-        print("⚠ 未找到env.example文件")
+        print("⚠ 未找到 .env.example 文件")
     
     print("\n" + "=" * 60)
     print("初始化完成！")
     print("=" * 60)
     print("\n下一步:")
     print("1. 编辑 .env 文件，填入API密钥等配置")
-    print("2. 运行 scripts/start_backend.py 启动后端服务")
+    print("2. 分别运行 python -m analysis_module.main 和 python -m ai_module.main")
     print("3. 运行 npm run dev 启动前端服务")
 
 if __name__ == "__main__":

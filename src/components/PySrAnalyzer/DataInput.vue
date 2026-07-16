@@ -1,40 +1,48 @@
 <template>
   <div class="data-input-section">
     <div class="section-header">
-      <h4>数据文件</h4>
-      <p class="section-subtitle">上传或编辑数据文件，支持 CSV、TXT 格式</p>
+      <div>
+        <h4>数据集</h4>
+        <p class="section-subtitle">上传或编辑实验数据，并确认变量映射</p>
+      </div>
+      <div class="source-actions">
+        <el-button type="primary" @click="loadDataFile" :disabled="disabled">选择数据文件</el-button>
+        <a :href="sampleDataUrl" download="GuideLab示例数据.csv">下载示例数据</a>
+      </div>
     </div>
     
-    <div class="help-text">文件应包含至少两列数据：x和y</div>
-    
-    <div class="sample-data">
-      <a href="/单摆实验数据.txt" download="单摆实验数据.txt">下载示例数据</a>
-    </div>
+    <div class="help-text">文件应包含至少两列数值数据；导入后可在下方校对列名与变量映射。</div>
 
     <!-- 表格控制按钮 -->
     <div class="table-controls">
-      <el-button size="small" @click="loadDataFile" :disabled="disabled">加载数据文件</el-button>
-      <el-button size="small" @click="addRow" :disabled="disabled">添加行</el-button>
-      <el-button size="small" @click="addColumn" :disabled="disabled">添加列</el-button>
-      <el-button size="small" @click="clearTable" :disabled="disabled">清空</el-button>
-      <el-button size="small" @click="loadSampleData" :disabled="disabled">加载示例</el-button>
-      <el-button size="small" @click="useFirstRowAsHeader" :disabled="!tableData.length || disabled">
-        第一行作列名
-      </el-button>
-      
-      <span style="margin-left: 8px;">行分页：</span>
-      <el-select v-model="rowGroupIndex" size="small" style="width: 160px" :disabled="!tableData.length">
-        <el-option 
-          v-for="opt in rowGroupOptions" 
-          :key="opt.value" 
-          :label="opt.label" 
-          :value="opt.value"
-        />
-      </el-select>
-      
-      <span style="margin-left: 8px;">总行数：</span>
-      <el-input-number v-model="totalRowsDesired" :min="1" :max="10000" size="small" />
-      <el-button size="small" @click="applyTotalRows" :disabled="disabled">设置行数</el-button>
+      <div class="control-group">
+        <el-button size="small" @click="addRow" :disabled="disabled">添加行</el-button>
+        <el-button size="small" @click="addColumn" :disabled="disabled">添加列</el-button>
+        <el-button size="small" @click="useFirstRowAsHeader" :disabled="!tableData.length || disabled">
+          首行作列名
+        </el-button>
+        <el-button size="small" @click="clearTable" :disabled="disabled">清空</el-button>
+        <el-button size="small" @click="loadSampleData" :disabled="disabled">加载示例</el-button>
+      </div>
+
+      <div class="control-group row-controls">
+        <label>
+          <span>行分页</span>
+          <el-select v-model="rowGroupIndex" size="small" class="row-select" :disabled="!tableData.length">
+            <el-option
+              v-for="opt in rowGroupOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </label>
+        <label>
+          <span>总行数</span>
+          <el-input-number v-model="totalRowsDesired" :min="1" :max="10000" size="small" />
+        </label>
+        <el-button size="small" @click="applyTotalRows" :disabled="disabled">应用</el-button>
+      </div>
     </div>
     
     <!-- 可编辑表格 -->
@@ -43,7 +51,7 @@
         :data="visibleRows" 
         border 
         style="width: 100%"
-        :max-height="300"
+        :max-height="260"
         class="editable-table"
       >
         <el-table-column 
@@ -51,7 +59,7 @@
           :key="col.prop"
           :prop="col.prop"
           :label="col.label"
-          width="120"
+          min-width="120"
         >
           <template #default="scope">
             <el-input
@@ -81,7 +89,7 @@
     <div class="col-pickers">
       <label>
         X 列（可多选）：
-        <el-select v-model="selectedXCols" multiple collapse-tags size="small" style="min-width: 220px">
+        <el-select v-model="selectedXCols" multiple collapse-tags size="small" class="x-select">
           <el-option 
             v-for="col in availableTableCols" 
             :key="col.value" 
@@ -93,7 +101,7 @@
       
       <label>
         Y 列：
-        <el-select v-model="selectedYCol" size="small" style="width: 120px">
+        <el-select v-model="selectedYCol" size="small" class="y-select">
           <el-option 
             v-for="col in availableTableCols" 
             :key="col.value" 
@@ -117,6 +125,7 @@
 
 <script>
 import { useDataTable } from './composables/useDataTable'
+import sampleDataUrl from '@/assets/sample_data.csv?url'
 
 export default {
   name: 'DataInput',
@@ -186,6 +195,7 @@ export default {
       handleUseTable,
       getVariableMapping,
       getVariableMappingText,
+      sampleDataUrl,
     }
   },
 }
@@ -193,92 +203,100 @@ export default {
 
 <style scoped>
 .data-input-section {
-  position: relative;
-  background: linear-gradient(160deg, #ffffff 0%, #fafbff 100%);
-  border: 1px solid rgba(63, 122, 224, 0.18);
-  border-radius: 16px;
-  padding: 24px 26px 28px;
-  box-shadow: 0 18px 24px -16px rgba(24, 39, 75, 0.35);
+  background: var(--gl-surface);
+  padding: 0 0 20px;
   overflow: hidden;
-}
-
-.data-input-section::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  border-top: 4px solid rgba(63, 122, 224, 0.35);
 }
 
 .section-header {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid rgba(63, 122, 224, 0.1);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
 }
 
 .section-header h4 {
   margin: 0;
-  color: #1f2d3d;
-  font-size: 18px;
+  color: var(--gl-text);
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.3px;
 }
 
 .section-subtitle {
-  margin: 0;
+  margin: 5px 0 0;
   font-size: 13px;
-  color: #7b8a9a;
+  color: var(--gl-text-secondary);
   line-height: 1.5;
 }
 
-.help-text {
-  color: #7b8a9a;
+.source-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.source-actions :deep(.el-button) {
+  min-height: 36px;
+  padding-inline: 16px;
   font-size: 13px;
-  margin-top: 12px;
-  padding: 10px 14px;
-  background: rgba(63, 122, 224, 0.06);
-  border-left: 3px solid rgba(63, 122, 224, 0.4);
-  border-radius: 6px;
+  font-weight: 600;
 }
 
-.sample-data {
-  margin-top: 12px;
-}
-
-.sample-data a {
-  color: #3f7ae0;
+.source-actions a {
+  color: var(--gl-primary);
+  font-size: 13px;
+  font-weight: 600;
   text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 6px 12px;
-  border-radius: 6px;
-  background: rgba(63, 122, 224, 0.08);
-  transition: all 0.3s;
-  display: inline-block;
 }
 
-.sample-data a:hover {
-  background: rgba(63, 122, 224, 0.15);
-  color: #2d5fc7;
-  transform: translateY(-1px);
+.source-actions a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.help-text {
+  color: var(--gl-text-secondary);
+  font-size: 13px;
+  padding: 9px 11px;
+  background: var(--gl-surface-subtle);
+  border-left: 2px solid var(--gl-primary);
+  border-radius: 6px;
 }
 
 .table-controls {
-  margin: 16px 0 12px 0;
+  margin: 14px 0 12px;
   display: flex;
+  justify-content: space-between;
+  gap: 12px 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.control-group,
+.row-controls,
+.row-controls label {
+  display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  align-items: center;
+}
+
+.row-controls label > span {
+  color: var(--gl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.row-select {
+  width: 138px;
 }
 
 .editable-table-container {
-  margin-bottom: 12px;
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
+  margin-bottom: 14px;
+  border: 1px solid var(--gl-border);
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -287,7 +305,7 @@ export default {
 }
 
 .editable-table :deep(.el-table__cell) {
-  padding: 4px;
+  padding: 5px;
 }
 
 .editable-table :deep(.el-input__inner) {
@@ -298,13 +316,12 @@ export default {
 }
 
 .editable-table :deep(.el-input__inner:focus) {
-  background: #f0f9ff;
-  border: 1px solid #409eff;
+  background: var(--gl-primary-soft);
 }
 
 .col-pickers {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -313,8 +330,66 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
-  color: #606266;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gl-text-secondary);
+}
+
+.x-select {
+  width: 220px;
+}
+
+.y-select {
+  width: 120px;
+}
+
+@media (max-width: 720px) {
+  .data-input-section {
+    padding-bottom: 16px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .source-actions {
+    width: 100%;
+  }
+
+  .source-actions :deep(.el-button) {
+    flex: 1;
+  }
+
+  .table-controls,
+  .control-group,
+  .row-controls {
+    width: 100%;
+  }
+
+  .row-controls label:first-child {
+    flex: 1 1 160px;
+  }
+
+  .row-select {
+    flex: 1;
+    width: auto;
+  }
+
+  .col-pickers,
+  .col-pickers label {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .col-pickers label {
+    flex-direction: column;
+  }
+
+  .x-select,
+  .y-select,
+  .col-pickers :deep(.el-button) {
+    width: 100%;
+  }
 }
 </style>
-

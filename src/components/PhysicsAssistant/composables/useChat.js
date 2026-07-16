@@ -3,16 +3,85 @@
  * 处理与AI的对话交互、消息发送、流式响应
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, unref, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
+import { API_SERVICES, API_ENDPOINTS, pysrAPI } from '@/utils/api/index.js'
 
-export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
+const CHAT_SESSION_KEY = 'guidelab_chat_session_id'
+const TOOL_LABELS = {
+  search_physics_knowledge: '检索物理知识库',
+  get_analysis_task_status: '查询分析任务状态',
+  get_analysis_service_status: '查询分析服务负载',
+  start_symbolic_regression: '提交 PySR 拟合任务',
+  cancel_analysis_task: '取消 PySR 拟合任务',
+}
+
+function getConversationId() {
+  const existing = window.sessionStorage.getItem(CHAT_SESSION_KEY)
+  if (existing) return existing
+
+  const id = window.crypto?.randomUUID?.() || `chat_${Date.now()}_${Math.random().toString(16).slice(2)}`
+  window.sessionStorage.setItem(CHAT_SESSION_KEY, id)
+  return id
+}
+
+export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName, dataContext) {
   const messages = ref([])
   const currentInput = ref('')
   const isLoading = ref(false)
   const streamingMessage = ref('')
   const streamingThinking = ref('')   // 流式阶段的思考内容（与正文分离）
+  const streamingTools = ref([])
+  const streamingTasks = ref([])
   const isStreaming = ref(false)
+  const taskPollControllers = new Map()
+
+  const formatTask = (taskId) => ({
+    taskId,
+    status: 'submitted',
+    progress: 5,
+    statusMessage: '任务已提交，等待计算服务处理',
+    result: null,
+    error: null,
+  })
+
+  const followAgentTask = (task) => {
+    if (!task?.taskId || taskPollControllers.has(task.taskId)) return
+
+    const controller = new AbortController()
+    taskPollControllers.set(task.taskId, controller)
+    pysrAPI.pollTaskStatus(
+      task.taskId,
+      (taskInfo, progressValue) => {
+        task.status = taskInfo.status
+        task.progress = progressValue
+        task.statusMessage = taskInfo.status_message || taskInfo.status
+        task.error = taskInfo.error || null
+      },
+      2000,
+      controller.signal
+    ).then((result) => {
+      task.status = 'completed'
+      task.progress = 100
+      task.statusMessage = '分析完成'
+      task.result = result
+    }).catch((error) => {
+      if (error.name === 'AbortError') return
+      task.status = 'failed'
+      task.error = error.message
+      task.statusMessage = `任务失败：${error.message}`
+    }).finally(() => {
+      taskPollControllers.delete(task.taskId)
+    })
+  }
+
+  const registerAgentTask = (taskId) => {
+    if (!taskId) return
+    const existing = streamingTasks.value.find(task => task.taskId === taskId)
+    if (existing) return
+    streamingTasks.value.push(formatTask(taskId))
+    followAgentTask(streamingTasks.value[streamingTasks.value.length - 1])
+  }
   
   // 当前模型配置
   const getCurrentApiConfig = () => {
@@ -53,6 +122,8 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
     isStreaming.value = true
     streamingMessage.value = ''
     streamingThinking.value = ''
+    streamingTools.value = []
+    streamingTasks.value = []
     
     try {
       // 构建请求消息
@@ -73,6 +144,8 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
         role: 'assistant',
         content: streamingMessage.value,
         thinking: streamingThinking.value || null,
+        tools: [...streamingTools.value],
+        tasks: [...streamingTasks.value],
         timestamp: new Date().toLocaleTimeString()
       })
     } catch (error) {
@@ -114,7 +187,7 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
   // 流式聊天补全（通过后端代理）
   const streamChatCompletion = async (messages, config, plotImage = null) => {
     // 使用后端的 /analyze_experiment 端点
-    const apiBaseUrl = import.meta.env.VITE_PYSR_API_URL || 'http://localhost:8000'
+    const apiBaseUrl = API_SERVICES.AI.baseURL
     
     // 提取用户问题（最后一条消息）
     const userMessage = messages[messages.length - 1]
@@ -124,6 +197,10 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
     const background = experimentInfo.value.description || ''
     const dataDescription = experimentInfo.value.name || ''
     const formula = experimentInfo.value.formula || ''
+    const currentData = unref(dataContext) || null
+    if ((currentData?.text?.length || 0) > 2_000_000) {
+      throw new Error('当前数据超过 2 MB，无法作为 AI 上下文发送')
+    }
     
     // 处理图像：如果是 base64 字符串，直接使用；如果是 data URL，提取 base64 部分
     let plotImageBase64 = ''
@@ -137,18 +214,23 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
       }
     }
     
-    const response = await fetch(`${apiBaseUrl}/analyze_experiment`, {
+    const response = await fetch(`${apiBaseUrl}${API_ENDPOINTS.AI.ANALYZE_EXPERIMENT}`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         background,
         data_description: dataDescription,
+        data_text: currentData?.text || '',
+        data_filename: currentData?.filename || '',
+        data_mapping: currentData?.mapping || '',
+        data_variable_mapping: currentData?.variableMapping || null,
         question,
         formula,
         plot_image: plotImageBase64,
-        conversation_id: 'default',
+        conversation_id: getConversationId(),
         reset_context: false
       })
     })
@@ -160,43 +242,57 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
     
     const reader = response.body.getReader()
     const decoder = new TextDecoder('utf-8')
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n').filter(line => line.trim() !== '')
-      
+    let sseBuffer = ''
+
+    const processSseBlock = (block) => {
+      const lines = block.split(/\r?\n/).filter(line => line.trim() !== '')
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-          
-          try {
-            const parsed = JSON.parse(data)
-            // 深度思考模式：思考内容单独累积，不混入正文
-            if (parsed.type === 'thinking' && parsed.content) {
-              streamingThinking.value += parsed.content
-            } else {
-              // 兼容后端返回的格式 {content: "..."} 或 OpenAI 格式
-              const content = parsed.content || parsed.choices?.[0]?.delta?.content
-              if (content) {
-                streamingMessage.value += content
-              }
+        if (!line.startsWith('data: ')) continue
+
+        const data = line.slice(6)
+        if (data === '[DONE]') continue
+
+        try {
+          const parsed = JSON.parse(data)
+          if (parsed.type === 'thinking' && parsed.content) {
+            streamingThinking.value += parsed.content
+          } else if (parsed.type === 'tool' && parsed.tool) {
+            const label = TOOL_LABELS[parsed.tool] || parsed.tool
+            streamingTools.value.push({
+              name: parsed.tool,
+              label,
+              ok: Boolean(parsed.ok),
+              durationMs: Number.isFinite(parsed.duration_ms) ? parsed.duration_ms : null,
+            })
+            if (parsed.ok && parsed.tool === 'start_symbolic_regression' && parsed.task_id) {
+              registerAgentTask(parsed.task_id)
             }
-            // 处理错误类型的消息
-            if (parsed.type === 'error') {
-              throw new Error(parsed.message || '后端返回错误')
-            }
-          } catch (e) {
-            if (e.message && e.message.includes('后端返回错误')) {
-              throw e
-            }
-            console.warn('解析流式响应失败:', e)
+          } else {
+            const content = parsed.content || parsed.choices?.[0]?.delta?.content
+            if (content) streamingMessage.value += content
           }
+          if (parsed.type === 'error') {
+            throw new Error(parsed.message || '后端返回错误')
+          }
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error
+          console.warn('解析流式响应失败:', error)
         }
       }
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        sseBuffer += decoder.decode()
+        if (sseBuffer.trim()) processSseBlock(sseBuffer)
+        break
+      }
+
+      sseBuffer += decoder.decode(value, { stream: true })
+      const blocks = sseBuffer.split(/\r?\n\r?\n/)
+      sseBuffer = blocks.pop() || ''
+      blocks.forEach(processSseBlock)
     }
   }
   
@@ -204,6 +300,11 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
   const clearMessages = () => {
     messages.value = []
     streamingMessage.value = ''
+    streamingTools.value = []
+    streamingTasks.value = []
+    for (const controller of taskPollControllers.values()) controller.abort()
+    taskPollControllers.clear()
+    window.sessionStorage.removeItem(CHAT_SESSION_KEY)
   }
   
   // 重新生成回复
@@ -221,6 +322,11 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
   
   // 是否有消息
   const hasMessages = computed(() => messages.value.length > 0)
+
+  onBeforeUnmount(() => {
+    for (const controller of taskPollControllers.values()) controller.abort()
+    taskPollControllers.clear()
+  })
   
   return {
     messages,
@@ -228,6 +334,8 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
     isLoading,
     streamingMessage,
     streamingThinking,
+    streamingTools,
+    streamingTasks,
     isStreaming,
     hasMessages,
     sendMessage,
@@ -235,4 +343,3 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName) {
     regenerateResponse,
   }
 }
-

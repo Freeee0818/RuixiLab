@@ -18,14 +18,14 @@ import { useAnalysis } from './composables/useAnalysis'
 
 export default {
   name: 'AnalysisView',
-  
+
   components: {
     AnalysisLayout,
   },
-  
+
   setup() {
     const route = useRoute()
-    
+
     // 使用组合式函数管理分析逻辑
     const {
       currentRegressionResult,
@@ -34,14 +34,14 @@ export default {
       handleCompleted,
       handleError,
     } = useAnalysis(route)
-    
+
     // 页面加载时滚动到顶部
     onMounted(() => {
       nextTick(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' })
       })
     })
-    
+
     return {
       currentRegressionResult,
       currentVisualizationResult,
@@ -55,11 +55,7 @@ export default {
 
 <style scoped>
 .analysis-view {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 0 8px 20px 8px;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  position: relative;
+  width: 100%;
 }
 </style>
 

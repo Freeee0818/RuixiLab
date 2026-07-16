@@ -6,12 +6,12 @@
       <div v-if="variableMappingText" class="variable-mapping">
         <em>{{ variableMappingText }}</em>
       </div>
-      
+
       <!-- 复杂度图 -->
       <div class="complexity-plot-section">
-        <img 
-          v-if="result.complexity_plot" 
-          :src="'data:image/png;base64,' + result.complexity_plot" 
+        <img
+          v-if="result.complexity_plot"
+          :src="'data:image/png;base64,' + result.complexity_plot"
           alt="Complexity vs Score"
           class="complexity-plot"
         />
@@ -23,8 +23,8 @@
         <div class="equation-list">
           <h4>拟合方程列表</h4>
           <div class="equations-scroll">
-            <div 
-              v-for="(eq, index) in result.equations" 
+            <div
+              v-for="(eq, index) in result.equations"
               :key="index"
               class="equation-card"
               :class="{ 'selected-equation': selectedIndex === index }"
@@ -44,11 +44,11 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 右侧拟合图像 -->
         <div class="fitting-plot">
           <h4>拟合图像</h4>
-          
+
           <div v-if="selectedIndex !== null" class="equation-plot">
             <!-- 加载中状态 -->
             <div v-if="isLoadingPlot" class="plot-loading">
@@ -56,10 +56,10 @@
               <p>正在加载图表...</p>
             </div>
             <!-- 图表显示 -->
-            <img 
-              v-else-if="selectedPlot" 
-              :src="'data:image/png;base64,' + selectedPlot" 
-              alt="Selected Equation Plot" 
+            <img
+              v-else-if="selectedPlot"
+              :src="'data:image/png;base64,' + selectedPlot"
+              alt="Selected Equation Plot"
               class="plot-image"
             />
             <!-- 无图表时的提示 -->
@@ -69,18 +69,18 @@
             <div class="equation-details">
               <h5>方程: {{ result.equations[selectedIndex]?.equation }}</h5>
               <p>
-                复杂度: {{ result.equations[selectedIndex]?.complexity }} | 
+                复杂度: {{ result.equations[selectedIndex]?.complexity }} |
                 得分: {{ result.equations[selectedIndex]?.score.toFixed(6) }}
               </p>
             </div>
           </div>
-          
+
           <div v-else class="all-equations-plot">
-            <img 
-              v-if="result.fitting_plot" 
-              :src="'data:image/png;base64,' + result.fitting_plot" 
-              alt="All Fitting Results" 
-              class="plot-image" 
+            <img
+              v-if="result.fitting_plot"
+              :src="'data:image/png;base64,' + result.fitting_plot"
+              alt="All Fitting Results"
+              class="plot-image"
             />
             <p class="plot-instruction">点击左侧方程查看个别拟合图像</p>
           </div>
@@ -93,14 +93,14 @@
       <div class="analysis-results">
         <div class="visualization-plot">
           <h4>数据可视化</h4>
-          <img 
-            v-if="result?.visualization" 
-            :src="'data:image/png;base64,' + result.visualization" 
+          <img
+            v-if="result?.visualization"
+            :src="'data:image/png;base64,' + result.visualization"
             alt="Data Visualization"
             class="plot-image"
           />
         </div>
-        
+
         <div class="analysis-text">
           <h4>分析结果</h4>
           <pre class="analysis-content">{{ result?.analysis }}</pre>
@@ -113,7 +113,7 @@
 <script>
 export default {
   name: 'ResultsDisplay',
-  
+
   props: {
     result: {
       type: Object,
@@ -140,7 +140,7 @@ export default {
       default: false,
     },
   },
-  
+
   emits: ['select-equation'],
 }
 </script>
@@ -149,7 +149,7 @@ export default {
 .results-display {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .variable-mapping {
@@ -163,72 +163,57 @@ export default {
 
 .complexity-plot-section {
   position: relative;
-  background: linear-gradient(160deg, #ffffff 0%, #f6f8ff 100%);
-  border: 1px solid rgba(63, 122, 224, 0.18);
-  border-radius: 16px;
-  padding: 24px;
+  background: var(--gl-surface-subtle);
+  border: 1px solid var(--gl-border);
+  border-radius: 10px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 0 18px 24px -16px rgba(24, 39, 75, 0.35);
+  box-shadow: none;
 }
 
 .complexity-plot-section::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  border-top: 4px solid rgba(63, 122, 224, 0.35);
+  content: none;
 }
 
 .complexity-plot {
   max-width: 100%;
   max-height: 350px;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s;
-}
-
-.complexity-plot:hover {
-  transform: scale(1.02);
+  box-shadow: none;
 }
 
 .results-container {
   display: flex;
-  gap: 24px;
-  min-height: 500px;
+  gap: 14px;
+  min-height: 420px;
 }
 
 .equation-list {
   flex: 1;
   position: relative;
-  background: linear-gradient(160deg, #ffffff 0%, #f6f8ff 100%);
-  border: 1px solid rgba(63, 122, 224, 0.18);
-  border-radius: 16px;
-  padding: 24px;
+  background: #ffffff;
+  border: 1px solid var(--gl-border);
+  border-radius: 10px;
+  padding: 15px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 18px 24px -16px rgba(24, 39, 75, 0.35);
+  box-shadow: none;
 }
 
 .equation-list::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  border-top: 4px solid rgba(63, 122, 224, 0.35);
+  content: none;
 }
 
 .equation-list h4,
 .fitting-plot h4 {
-  margin: 0 0 18px 0;
+  margin: 0 0 12px 0;
   color: #1f2d3d;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   padding-bottom: 12px;
-  border-bottom: 2px solid rgba(63, 122, 224, 0.1);
+  border-bottom: 1px solid var(--gl-border);
 }
 
 .equations-scroll {
@@ -253,23 +238,22 @@ export default {
 }
 
 .equation-card {
-  background: linear-gradient(160deg, #ffffff 0%, #fafbff 100%);
-  border: 2px solid rgba(63, 122, 224, 0.15);
-  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--gl-border);
+  border-radius: 8px;
   margin-bottom: 12px;
   cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 4px 12px -4px rgba(24, 39, 75, 0.2);
+  transition: border-color 0.2s, background-color 0.2s;
+  box-shadow: none;
 }
 
 .equation-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px -8px rgba(63, 122, 224, 0.3);
+  border-color: #9bb9ef;
 }
 
 .selected-equation {
-  border: 2px solid #3f7ae0;
-  background: linear-gradient(160deg, rgba(63, 122, 224, 0.05) 0%, #ffffff 100%);
+  border-color: var(--gl-primary);
+  background: var(--gl-primary-soft);
 }
 
 .equation-header {
@@ -277,7 +261,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: linear-gradient(135deg, rgba(63, 122, 224, 0.06), rgba(63, 122, 224, 0.02));
+  background: var(--gl-surface-subtle);
   border-bottom: 1px solid rgba(63, 122, 224, 0.1);
 }
 
@@ -288,7 +272,7 @@ export default {
 }
 
 .best-tag {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: var(--gl-success);
   color: white;
   padding: 4px 10px;
   border-radius: 12px;
@@ -323,22 +307,17 @@ export default {
 .fitting-plot {
   flex: 2;
   position: relative;
-  background: linear-gradient(160deg, #ffffff 0%, #f6f8ff 100%);
-  border: 1px solid rgba(63, 122, 224, 0.18);
-  border-radius: 16px;
-  padding: 24px;
+  background: #ffffff;
+  border: 1px solid var(--gl-border);
+  border-radius: 10px;
+  padding: 15px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 18px 24px -16px rgba(24, 39, 75, 0.35);
+  box-shadow: none;
 }
 
 .fitting-plot::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  border-top: 4px solid rgba(63, 122, 224, 0.35);
+  content: none;
 }
 
 .plot-image {
@@ -389,9 +368,10 @@ export default {
   gap: 25px;
   flex-direction: column;
   background-color: white;
+  border: 1px solid var(--gl-border);
   border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  box-shadow: none;
 }
 
 .visualization-plot,
@@ -444,7 +424,7 @@ export default {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1300px) {
   .results-container {
     flex-direction: column;
   }

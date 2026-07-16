@@ -19,7 +19,7 @@ pip install -r analysis_module/requirements.txt
 
 ```bash
 # 复制模板
-cp env.example .env
+cp .env.example .env
 ```
 
 ### 3. 编辑配置文件
@@ -41,15 +41,13 @@ AI_API_KEY=sk-your_actual_api_key_here
 ### 4. 启动服务
 
 ```bash
-# 启动PySR服务（终端1）
-cd pysr_module
-python main.py
+# 计算服务（终端 1，绘图 + PySR）
+python -m analysis_module.main --port 8000
 
-# 启动数据分析服务（终端2）
-cd analysis_module
-python data.py
+# AI 服务（终端 2，问答 + RAG + Agent）
+python -m ai_module.main --port 8001
 
-# 启动前端（终端3）
+# 前端（终端 3）
 npm run dev
 ```
 
@@ -65,10 +63,12 @@ Model: deepseek-chat
 Max Tokens: 2000
 ==================================================
 
-🚀 启动 GuideLab PySR服务
+启动 GuideLab 计算服务（绘图 + PySR）
 📍 地址: http://0.0.0.0:8000
 📖 文档: http://0.0.0.0:8000/docs
-🔧 配置文件: .env
+
+启动 GuideLab AI 服务（问答 + RAG + Agent）
+📍 地址: http://0.0.0.0:8001
 ```
 
 ## 🔐 重要安全提示
@@ -76,7 +76,7 @@ Max Tokens: 2000
 1. ⚠️ **永远不要**将 `.env` 文件提交到Git
 2. ⚠️ `.env` 文件包含敏感的API密钥
 3. ✅ `.env` 文件已被添加到 `.gitignore`
-4. ✅ 使用 `env.example` 作为模板分享
+4. ✅ 使用 `.env.example` 作为模板分享
 
 ## 📝 环境变量说明
 
@@ -94,12 +94,31 @@ Max Tokens: 2000
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `PYSR_SERVICE_PORT` | 8000 | PySR服务端口 |
-| `ANALYSIS_SERVICE_PORT` | 8001 | 数据分析服务端口 |
+| `COMPUTE_SERVICE_PORT` | 8000 | 绘图与 PySR 计算服务端口 |
+| `COMPUTE_SERVICE_URL` | `http://127.0.0.1:8000` | AI Tool 访问计算服务的内部地址 |
+| `AI_SERVICE_PORT` | 8001 | AI 问答/RAG 服务端口 |
+| `PYSR_MAX_CONCURRENT_TASKS` | 3 | 同时运行的独立 PySR 任务数 |
+| `PYSR_PROCS_PER_TASK` | 2 | 单个 PySR 任务使用的 Julia 核心数 |
+| `PYSR_POPULATIONS_PER_TASK` | 6 | 单任务种群数，建议约为核心数的 3 倍 |
+| `PYSR_PARALLELISM` | `multithreading` | 单任务并行模式 |
+| `PYSR_MAX_QUEUED_TASKS` | 80 | 等待队列上限 |
 | `CORS_ORIGINS` | `["http://localhost:5173"]` | 允许的前端地址 |
 | `DEBUG` | false | 调试模式 |
 
-完整配置项请参考 `env.example` 文件。
+完整配置项请参考 `.env.example` 文件。
+
+16 核 / 32 GB 服务器建议先从以下配置开始：
+
+```env
+PYSR_MAX_CONCURRENT_TASKS=4
+PYSR_PROCS_PER_TASK=3
+PYSR_POPULATIONS_PER_TASK=9
+PYSR_PARALLELISM=multithreading
+PYSR_MAX_QUEUED_TASKS=120
+```
+
+这会为 PySR 预留最多 12 个 CPU 槽位，余下资源供系统、绘图和请求处理使用。上线后再根据
+`/service-status`、内存峰值与课堂压测结果调整，不建议直接把 16 核全部占满。
 
 ## 🐛 常见问题
 

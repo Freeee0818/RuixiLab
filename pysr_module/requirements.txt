@@ -1,13 +1,2 @@
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-python-dotenv>=1.0.0
-pysr>=0.16.0
-numpy>=1.24.0
-pandas>=2.0.0
-matplotlib>=3.7.0
-httpx>=0.25.0
-beautifulsoup4>=4.12.0
-flask-cors>=4.0.0
+# 兼容旧安装命令；计算后端依赖统一维护在 analysis_module。
+-r ../analysis_module/requirements.txt

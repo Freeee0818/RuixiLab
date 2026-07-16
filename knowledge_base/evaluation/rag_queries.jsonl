@@ -1,0 +1,12 @@
+{"query":"单摆的小角度周期公式是什么？","expected_sources":["单摆","物理实验"]}
+{"query":"大角度摆的周期为什么会随振幅变化？","expected_sources":["大角度摆","单摆运动规律"]}
+{"query":"如何用视频或 Tracker 提取摆球坐标？","expected_sources":["使用教程","单摆运动规律"]}
+{"query":"PySR 符号回归如何搜索数学表达式？","expected_sources":["pysr","Al-Khwarizmi","Symbolic Models"]}
+{"query":"符号回归中的复杂度和损失如何权衡？","expected_sources":["pysr","Al-Khwarizmi","Symbolic Models"]}
+{"query":"怎样测量圆柱体的静摩擦系数和滑动摩擦系数？","expected_sources":["静摩擦系数","滑动摩擦系数"]}
+{"query":"霍尔元件测磁场实验的基本原理是什么？","expected_sources":["霍尔元件测磁场"]}
+{"query":"杨氏模量实验中需要测量哪些量？","expected_sources":["杨氏模量"]}
+{"query":"振幅法测声速的实验步骤是什么？","expected_sources":["振幅法测声速"]}
+{"query":"巨磁阻效应实验观察什么物理量？","expected_sources":["巨磁阻效应"]}
+{"query":"光的偏振实验如何验证马吕斯定律？","expected_sources":["光的偏振"]}
+{"query":"混沌摆数据可以分析哪些动力学特征？","expected_sources":["混沌摆数据","复杂摆实验数据"]}

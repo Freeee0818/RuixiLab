@@ -8,6 +8,5 @@ if [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
-# 启动服务
-python scripts/start_backend.py
-
+# 启动计算服务（绘图 + PySR）
+python -m analysis_module.main

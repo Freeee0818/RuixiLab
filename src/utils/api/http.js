@@ -18,6 +18,7 @@ export function createServiceClient(serviceConfig) {
   const client = axios.create({
     baseURL: serviceConfig.baseURL,
     timeout: serviceConfig.timeout || 10000,
+    withCredentials: true,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -30,12 +31,12 @@ export function createServiceClient(serviceConfig) {
       // - 添加认证token
       // - 添加请求ID用于追踪
       // - 添加时间戳
-      
+
       // 记录请求日志（开发环境）
       if (import.meta.env.DEV) {
         console.log(`[${serviceConfig.name}] 请求:`, config.method?.toUpperCase(), config.url)
       }
-      
+
       return config
     },
     (error) => {
@@ -51,21 +52,21 @@ export function createServiceClient(serviceConfig) {
       if (import.meta.env.DEV) {
         console.log(`[${serviceConfig.name}] 响应:`, response.status, response.config.url)
       }
-      
+
       // 直接返回响应数据
       return response.data
     },
     (error) => {
       // 统一错误处理
       let message = '请求失败'
-      
+
       if (error.response) {
         // 服务器返回了错误响应
         const status = error.response.status
         const data = error.response.data
-        
+
         message = data?.detail || data?.message || data?.error || `服务器错误 (${status})`
-        
+
         // 特殊状态码处理
         switch (status) {
           case 400:
@@ -97,15 +98,15 @@ export function createServiceClient(serviceConfig) {
         // 其他错误
         message = error.message || '未知错误'
       }
-      
+
       // 显示错误提示
       ElMessage.error({
         message: `${serviceConfig.name}: ${message}`,
         duration: 3000,
       })
-      
+
       console.error(`[${serviceConfig.name}] 错误:`, error)
-      
+
       return Promise.reject(error)
     }
   )
@@ -122,6 +123,7 @@ export function createSilentClient(serviceConfig) {
   const client = axios.create({
     baseURL: serviceConfig.baseURL,
     timeout: serviceConfig.timeout || 10000,
+    withCredentials: true,
     headers: {
       'Content-Type': 'application/json',
     },

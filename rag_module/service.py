@@ -1,156 +1,411 @@
-import os
+"""Hybrid retrieval service: BGE-M3 dense+sparse, Qdrant RRF and reranking."""
+
+from __future__ import annotations
+
 import logging
-from typing import List, Optional, Dict, Any
+import os
+import threading
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Iterable, Optional
 
-# 模型缓存放到项目目录下，避免占满 C 盘（项目在 F 盘则缓存在 F 盘）
-_rag_dir = os.path.dirname(os.path.abspath(__file__))
-_project_root = os.path.dirname(_rag_dir)
-_hf_cache = os.path.join(_project_root, ".cache", "huggingface")
-os.makedirs(_hf_cache, exist_ok=True)
-os.environ.setdefault("HUGGINGFACE_HUB_CACHE", _hf_cache)
-os.environ.setdefault("HF_HOME", _hf_cache)
-
-from llama_index.core import (
-  VectorStoreIndex, 
-  StorageContext, 
-  ServiceContext, 
-  load_index_from_storage,
-  Settings
-)
-from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.retrievers import VectorIndexRetriever
-from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.postprocessor import SimilarityPostprocessor
-from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.openai import OpenAI
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 
 from config.settings import settings
+from rag_module.chunking import HybridChunk
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
+
 class RAGService:
-  def __init__(self):
-    self.client = None
-    self.vector_store = None
-    self.index = None
-    self.query_engine = None
-    self.initialized = False
-    
-    # 确保目录存在
-    settings.ensure_directories()
-    
-  def initialize(self):
-    """初始化 RAG 系统"""
-    try:
-      # 1. 配置 Embedding 模型 (自动检测 GPU)
-      import torch
-      device = "cuda" if torch.cuda.is_available() else "cpu"
-      logger.info(f"正在加载 Embedding 模型: {settings.RAG_EMBEDDING_MODEL} (设备: {device})")
-      embed_model = HuggingFaceEmbedding(
-        model_name=settings.RAG_EMBEDDING_MODEL,
-        device=device
-      )
-      
-      # 2. 配置 LLM (云端 API) - 兼容 DeepSeek 等非 OpenAI 模型
-      ai_config = settings.get_ai_config()
-      
-      # 使用 OpenAI 类，但关闭模型验证
-      llm = OpenAI(
-        api_key=ai_config["api_key"],
-        api_base=ai_config["base_url"],
-        model="gpt-3.5-turbo",  # 临时使用默认值，实际请求会用真实 model
-        temperature=ai_config["temperature"],
-        max_tokens=ai_config["max_tokens"],
-        additional_kwargs={"model": ai_config["model"]}  # 实际模型名
-      )
-      
-      # 设置全局 LlamaIndex 配置
-      Settings.llm = llm
-      Settings.embed_model = embed_model
-      
-      # ✨ 配置文本分块器（关键优化）
-      Settings.node_parser = SentenceSplitter(
-        chunk_size=512,        # 每个块的字符数（中文约 256 个字）
-        chunk_overlap=128,      # 重叠字符数，保证语义连续性
-        separator="\n\n",       # 优先按段落切分
-        paragraph_separator="\n\n\n",  # 段落分隔符
-      )
-      logger.info("✨ 已启用智能分块：chunk_size=512, overlap=128")
-      
-      # 3. 初始化 Qdrant 客户端 (本地存储)
-      logger.info(f"正在初始化 Qdrant 向量库: {settings.RAG_VECTOR_DIR}")
-      self.client = QdrantClient(path=settings.RAG_VECTOR_DIR)
-      
-      # 4. 初始化 Vector Store
-      self.vector_store = QdrantVectorStore(
-        client=self.client, 
-        collection_name="physics_knowledge"
-      )
-      
-      # 5. 尝试加载现有索引
-      storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
-      
-      # 检查是否有已存在的数据
-      if self._is_index_exists():
-        logger.info("发现现有索引，正在加载...")
-        self.index = VectorStoreIndex.from_vector_store(
-          self.vector_store, storage_context=storage_context
+    DENSE_VECTOR_NAME = "dense"
+    SPARSE_VECTOR_NAME = "sparse"
+
+    def __init__(
+        self,
+        *,
+        client: QdrantClient | None = None,
+        embedder: Any = None,
+        reranker: Any = None,
+    ) -> None:
+        self.client = client
+        self.embedder = embedder
+        self.reranker = reranker
+        self.initialized = False
+        self._init_lock = threading.Lock()
+        self._model_lock = threading.Lock()
+        self._search_slots = threading.BoundedSemaphore(settings.RAG_MAX_CONCURRENT_SEARCHES)
+
+    @property
+    def collection_name(self) -> str:
+        return settings.RAG_COLLECTION_NAME
+
+    def initialize(self) -> None:
+        if self.initialized:
+            return
+        with self._init_lock:
+            if self.initialized:
+                return
+            settings.ensure_ai_directories()
+            self._configure_model_cache()
+            # Load the remote/local model before opening Qdrant. If the first
+            # model download fails, no local Qdrant client is left half-open
+            # during interpreter shutdown, which otherwise hides the real
+            # download exception behind a destructor traceback.
+            if self.embedder is None:
+                self.embedder = self._load_embedder()
+            if self.client is None:
+                self.client = QdrantClient(path=settings.RAG_VECTOR_DIR)
+            self._ensure_collection()
+            self.initialized = True
+            logger.info(
+                "RAG v2 initialized: collection=%s, mode=%s",
+                self.collection_name,
+                settings.RAG_RETRIEVAL_MODE,
+            )
+
+    @staticmethod
+    def _configure_model_cache() -> None:
+        default_cache = str(Path(settings.KNOWLEDGE_BASE_DIR) / "model_cache")
+        os.environ.setdefault("HF_HOME", default_cache)
+        hub_cache = str(Path(default_cache) / "hub")
+        # HF_HUB_CACHE is the current huggingface_hub variable. Keep the old
+        # name as a compatibility alias for older FlagEmbedding stacks.
+        os.environ.setdefault("HF_HUB_CACHE", hub_cache)
+        os.environ.setdefault("HUGGINGFACE_HUB_CACHE", hub_cache)
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+    @staticmethod
+    def _use_fp16() -> bool:
+        if not settings.RAG_USE_FP16:
+            return False
+        try:
+            import torch
+
+            return bool(torch.cuda.is_available())
+        except ImportError:
+            return False
+
+    def _load_embedder(self) -> Any:
+        try:
+            from FlagEmbedding import BGEM3FlagModel
+        except ImportError as exc:
+            raise RuntimeError(
+                "缺少 FlagEmbedding，请执行: python -m pip install -r rag_module/requirements.txt"
+            ) from exc
+        logger.info("Loading BGE-M3 embedder: %s", settings.RAG_EMBEDDING_MODEL)
+        return BGEM3FlagModel(
+            settings.RAG_EMBEDDING_MODEL,
+            use_fp16=self._use_fp16(),
         )
-      else:
-        logger.info("未发现索引，初始化为空索引")
-        self.index = VectorStoreIndex.from_documents(
-          [], storage_context=storage_context
+
+    def _load_reranker(self) -> Any:
+        try:
+            from FlagEmbedding import FlagReranker
+        except ImportError as exc:
+            raise RuntimeError(
+                "缺少 FlagEmbedding reranker，请重新安装 rag_module/requirements.txt"
+            ) from exc
+        logger.info("Loading reranker lazily: %s", settings.RAG_RERANK_MODEL)
+        return FlagReranker(
+            settings.RAG_RERANK_MODEL,
+            use_fp16=self._use_fp16(),
         )
-      
-      # 6. 创建增强型查询引擎（使用相似度后处理）
-      retriever = VectorIndexRetriever(
-        index=self.index,
-        similarity_top_k=15,  # 初始检索更多结果，从 10 提高到 15
-      )
-      
-      # 添加相似度过滤器（降低阈值）
-      postprocessor = SimilarityPostprocessor(
-        similarity_cutoff=0.3  # 从 0.5 降低到 0.3，提高召回率
-      )
-      
-      self.query_engine = RetrieverQueryEngine(
-        retriever=retriever,
-        node_postprocessors=[postprocessor],
-      )
-      
-      self.initialized = True
-      logger.info("✅ RAG 系统初始化完成（已启用增强检索，similarity_cutoff=0.3）")
-      
-    except Exception as e:
-      logger.error(f"RAG 系统初始化失败: {str(e)}", exc_info=True)
-      self.initialized = False
 
-  def _is_index_exists(self) -> bool:
-    """检查向量库中是否已有数据"""
-    try:
-      collections = self.client.get_collections().collections
-      return any(c.name == "physics_knowledge" for c in collections)
-    except Exception:
-      return False
+    def _ensure_collection(self) -> None:
+        assert self.client is not None
+        if self.client.collection_exists(self.collection_name):
+            return
+        self.client.create_collection(
+            collection_name=self.collection_name,
+            vectors_config={
+                self.DENSE_VECTOR_NAME: models.VectorParams(
+                    size=settings.RAG_DENSE_VECTOR_SIZE,
+                    distance=models.Distance.COSINE,
+                )
+            },
+            sparse_vectors_config={
+                self.SPARSE_VECTOR_NAME: models.SparseVectorParams(
+                    index=models.SparseIndexParams(on_disk=False),
+                )
+            },
+        )
 
-  def query(self, question: str) -> Any:
-    """查询知识库"""
-    if not self.initialized:
-      self.initialize()
-      if not self.initialized:
-        return "RAG 系统未能成功初始化，请检查配置和 GPU 状态。"
-    
-    try:
-      response = self.query_engine.query(question)
-      return response
-    except Exception as e:
-      logger.error(f"查询出错: {str(e)}")
-      return f"查询过程中出现错误: {str(e)}"
+    def collection_count(self) -> int:
+        self.initialize()
+        assert self.client is not None
+        return int(
+            self.client.count(
+                collection_name=self.collection_name,
+                exact=True,
+            ).count
+        )
 
-# 创建单例
+    def _encode(self, texts: list[str], *, query: bool) -> tuple[list[list[float]], list[dict[str, float]]]:
+        self.initialize()
+        method_name = "encode_queries" if query else "encode_corpus"
+        method = getattr(self.embedder, method_name, None) or getattr(self.embedder, "encode")
+        with self._model_lock:
+            output = method(
+                texts,
+                batch_size=settings.RAG_EMBED_BATCH_SIZE,
+                max_length=settings.RAG_MODEL_MAX_LENGTH,
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=False,
+            )
+        dense_raw = output["dense_vecs"]
+        sparse_raw = output["lexical_weights"]
+        dense = [item.tolist() if hasattr(item, "tolist") else list(item) for item in dense_raw]
+        sparse = [
+            {str(key): float(value) for key, value in dict(item).items() if float(value) != 0.0}
+            for item in sparse_raw
+        ]
+        if len(dense) != len(texts) or len(sparse) != len(texts):
+            raise RuntimeError("BGE-M3 返回的向量数量与输入文本数量不一致")
+        if dense and len(dense[0]) != settings.RAG_DENSE_VECTOR_SIZE:
+            raise RuntimeError(
+                f"BGE-M3 dense 维度为 {len(dense[0])}，但 RAG_DENSE_VECTOR_SIZE="
+                f"{settings.RAG_DENSE_VECTOR_SIZE}"
+            )
+        return dense, sparse
+
+    @staticmethod
+    def _sparse_vector(weights: dict[str, float]) -> models.SparseVector:
+        ordered = sorted((int(key), float(value)) for key, value in weights.items())
+        return models.SparseVector(
+            indices=[key for key, _ in ordered],
+            values=[value for _, value in ordered],
+        )
+
+    def upsert_chunks(self, chunks: Iterable[HybridChunk]) -> int:
+        self.initialize()
+        assert self.client is not None
+        items = list(chunks)
+        for start in range(0, len(items), settings.RAG_EMBED_BATCH_SIZE):
+            batch = items[start : start + settings.RAG_EMBED_BATCH_SIZE]
+            dense_vectors, sparse_vectors = self._encode(
+                [chunk.embedding_text for chunk in batch],
+                query=False,
+            )
+            points = []
+            for chunk, dense, sparse in zip(batch, dense_vectors, sparse_vectors):
+                points.append(
+                    models.PointStruct(
+                        id=chunk.point_id,
+                        vector={
+                            self.DENSE_VECTOR_NAME: dense,
+                            self.SPARSE_VECTOR_NAME: self._sparse_vector(sparse),
+                        },
+                        payload=chunk.payload(),
+                    )
+                )
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=points,
+                wait=True,
+            )
+        return len(items)
+
+    def prune_source_versions(self, file_key: str, keep_version: str) -> None:
+        """Remove old chunks only after the replacement version was uploaded."""
+        self.initialize()
+        assert self.client is not None
+        selector = models.FilterSelector(
+            filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="file_key",
+                        match=models.MatchValue(value=file_key),
+                    )
+                ],
+                must_not=[
+                    models.FieldCondition(
+                        key="ingestion_version",
+                        match=models.MatchValue(value=keep_version),
+                    )
+                ],
+            )
+        )
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=selector,
+            wait=True,
+        )
+
+    def delete_source(self, file_key: str) -> None:
+        self.initialize()
+        assert self.client is not None
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="file_key",
+                            match=models.MatchValue(value=file_key),
+                        )
+                    ]
+                )
+            ),
+            wait=True,
+        )
+
+    def _query_points(self, question: str, mode: str, limit: int) -> list[Any]:
+        assert self.client is not None
+        dense, sparse = self._encode([question], query=True)
+        dense_query = dense[0]
+        sparse_query = self._sparse_vector(sparse[0])
+
+        if mode == "dense":
+            response = self.client.query_points(
+                collection_name=self.collection_name,
+                query=dense_query,
+                using=self.DENSE_VECTOR_NAME,
+                limit=limit,
+                with_payload=True,
+                score_threshold=settings.RAG_SIMILARITY_THRESHOLD,
+            )
+        elif mode == "sparse":
+            response = self.client.query_points(
+                collection_name=self.collection_name,
+                query=sparse_query,
+                using=self.SPARSE_VECTOR_NAME,
+                limit=limit,
+                with_payload=True,
+            )
+        else:
+            response = self.client.query_points(
+                collection_name=self.collection_name,
+                prefetch=[
+                    models.Prefetch(
+                        query=dense_query,
+                        using=self.DENSE_VECTOR_NAME,
+                        limit=settings.RAG_DENSE_CANDIDATES,
+                    ),
+                    models.Prefetch(
+                        query=sparse_query,
+                        using=self.SPARSE_VECTOR_NAME,
+                        limit=settings.RAG_SPARSE_CANDIDATES,
+                    ),
+                ],
+                query=models.FusionQuery(fusion=models.Fusion.RRF),
+                limit=limit,
+                with_payload=True,
+            )
+        return list(response.points)
+
+    def _rerank(self, question: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not candidates or not settings.RAG_RERANK_ENABLED:
+            return candidates
+        if self.reranker is None:
+            with self._init_lock:
+                if self.reranker is None:
+                    self.reranker = self._load_reranker()
+        pairs = [[question, str(candidate["payload"].get("text") or "")] for candidate in candidates]
+        with self._model_lock:
+            scores = self.reranker.compute_score(pairs, normalize=True)
+        if not isinstance(scores, (list, tuple)) and not hasattr(scores, "tolist"):
+            scores = [scores]
+        if hasattr(scores, "tolist"):
+            scores = scores.tolist()
+        for candidate, score in zip(candidates, scores):
+            candidate["rerank_score"] = float(score)
+        return sorted(candidates, key=lambda item: item.get("rerank_score", 0.0), reverse=True)
+
+    def retrieve(
+        self,
+        question: str,
+        top_k: Optional[int] = None,
+        *,
+        mode: str | None = None,
+        rerank: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        question = str(question or "").strip()
+        if not question:
+            raise ValueError("检索问题不能为空")
+        self.initialize()
+        if self.collection_count() == 0:
+            return []
+
+        requested = max(1, min(int(top_k or settings.RAG_TOP_K), 10))
+        retrieval_mode = (mode or settings.RAG_RETRIEVAL_MODE).lower()
+        if retrieval_mode not in {"dense", "sparse", "hybrid", "hybrid_rerank"}:
+            raise ValueError(f"不支持的检索模式: {retrieval_mode}")
+        use_reranker = rerank if rerank is not None else retrieval_mode == "hybrid_rerank"
+        candidate_limit = max(
+            requested,
+            settings.RAG_FUSION_CANDIDATES if retrieval_mode.startswith("hybrid") else requested * 3,
+        )
+
+        acquired = self._search_slots.acquire(timeout=settings.RAG_SEARCH_SLOT_TIMEOUT_SECONDS)
+        if not acquired:
+            raise RuntimeError("RAG 检索繁忙，请稍后重试")
+        try:
+            points = self._query_points(question, retrieval_mode, candidate_limit)
+            candidates = [
+                {
+                    "point_id": str(point.id),
+                    "retrieval_score": float(point.score),
+                    "payload": dict(point.payload or {}),
+                }
+                for point in points
+            ]
+            if use_reranker:
+                candidates = self._rerank(question, candidates)
+        finally:
+            self._search_slots.release()
+
+        results: list[dict[str, Any]] = []
+        seen_parents: set[str] = set()
+        source_counts: defaultdict[str, int] = defaultdict(int)
+        for candidate in candidates:
+            payload = candidate["payload"]
+            parent_id = str(payload.get("parent_id") or candidate["point_id"])
+            file_name = str(payload.get("file_name") or "知识库片段")
+            if parent_id in seen_parents or source_counts[file_name] >= settings.RAG_MAX_RESULTS_PER_SOURCE:
+                continue
+            rerank_score = candidate.get("rerank_score")
+            if rerank_score is not None and rerank_score < settings.RAG_RERANK_THRESHOLD:
+                continue
+            seen_parents.add(parent_id)
+            source_counts[file_name] += 1
+            context = str(payload.get("context") or payload.get("text") or "")
+            results.append(
+                {
+                    "title": file_name,
+                    "score": rerank_score if rerank_score is not None else candidate["retrieval_score"],
+                    "retrieval_score": candidate["retrieval_score"],
+                    "rerank_score": rerank_score,
+                    "excerpt": context[: settings.RAG_MAX_CONTEXT_CHARS],
+                    "metadata": {
+                        key: payload.get(key)
+                        for key in (
+                            "file_name",
+                            "page_label",
+                            "document_id",
+                            "parent_id",
+                            "section_title",
+                            "content_type",
+                        )
+                        if payload.get(key) not in (None, "")
+                    },
+                }
+            )
+            if len(results) >= requested:
+                break
+        return results
+
+    def query(self, question: str) -> list[dict[str, Any]]:
+        """Compatibility wrapper; answer generation remains the Agent's job."""
+        return self.retrieve(question)
+
+    def close(self) -> None:
+        if self.client is not None:
+            self.client.close()
+            self.client = None
+        self.initialized = False
+
+
 rag_service = RAGService()
-

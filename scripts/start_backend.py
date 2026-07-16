@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-后端服务启动脚本
+"""Compatibility launcher for the compute backend.
+
+AI now runs independently with ``python -m ai_module.main``.
 """
 
 import os
@@ -21,9 +22,10 @@ if env_path.exists():
 else:
     print("警告: 未找到.env文件，使用默认配置或环境变量")
 
-# 导入并启动服务
-from pysr_module.main import main
+# 导入并启动绘图 + PySR 计算服务
+from analysis_module.main import main
 
 if __name__ == "__main__":
+    print("提示：AI 服务请在另一个环境/进程运行 python -m ai_module.main")
     main()
 

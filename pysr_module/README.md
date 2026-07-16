@@ -113,18 +113,18 @@ python main.py --port 8000
 
 本服务**支持 iframe 嵌入集成**：后端未设置 `X-Frame-Options` 或 CSP `frame-ancestors`，默认允许被第三方页面嵌入。
 
-- **嵌入整站（含智能体/分析页）**  
+- **嵌入整站（含智能体/分析页）**
   将平台首页或分析页放入 iframe 即可，例如：
   - 打包/一体模式：`https://你的域名/` 或 `https://你的域名/analysis`
   - 开发模式：前端若单独部署，使用前端地址（如 `http://localhost:5173/analysis`）
 
-- **仅嵌入分析页（含符号回归 + 物理实验助手）**  
+- **仅嵌入分析页（含符号回归 + 物理实验助手）**
   使用路径 `/analysis` 即可。
 
-- **跨域与 Cookie**  
+- **跨域与 Cookie**
   若父页面与平台不同源，需确保后端 CORS 配置允许该来源；若使用 Cookie/登录态，需注意 `allow_credentials` 与 `allow_origins` 的配置（不能使用 `allow_origins=["*"]` 且 `allow_credentials=True`）。
 
-- **限制允许的嵌入来源（可选）**  
+- **限制允许的嵌入来源（可选）**
   若需只允许指定站点嵌入，可在后端为 HTML 响应添加 `Content-Security-Policy: frame-ancestors 'self' https://允许的域名`，或使用中间件设置 `X-Frame-Options: ALLOW-FROM uri`（部分浏览器已废弃，推荐用 CSP）。
 
 ## 使用示例
@@ -140,7 +140,7 @@ params = {
     'population_size': 20,
     'niterations': 100
 }
-response = requests.post('http://localhost:8000/api/tasks', 
+response = requests.post('http://localhost:8000/api/tasks',
                         files=files,
                         data={'params': json.dumps(params)})
 task_id = response.json()['task_id']
@@ -208,4 +208,4 @@ pysr_module/
 
 ## 许可证
 
-MIT License 
+MIT License

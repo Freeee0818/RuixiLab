@@ -7,7 +7,7 @@ import { createServiceClient } from '../http'
 import { API_SERVICES, API_ENDPOINTS } from '../config'
 
 // 创建数据分析服务客户端
-const client = createServiceClient(API_SERVICES.ANALYSIS)
+const client = createServiceClient(API_SERVICES.COMPUTE)
 
 /**
  * 数据分析服务API集合
@@ -34,7 +34,7 @@ export const analysisAPI = {
     formData.append('file', file)
     formData.append('params', JSON.stringify(params))
 
-    return client.post(API_ENDPOINTS.ANALYSIS.ANALYZE_DATA, formData, {
+    return client.post(API_ENDPOINTS.COMPUTE.ANALYZE_DATA, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

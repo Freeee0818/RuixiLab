@@ -27,8 +27,7 @@ import { pysrAPI, analysisAPI } from '@/utils/api'
 const result = await pysrAPI.submitTask(file, {
   niterations: 100,
   population_size: 20,
-  binary_operators: ['+', '-', '*', '/'],
-  unary_operators: ['sin', 'cos', 'exp'],
+  maxsize: 20,
 })
 
 // PySR服务 - 获取任务状态
@@ -64,7 +63,6 @@ const analysis = await analysisAPI.analyzeData(
 - `submitTask(file, params)` - 提交符号回归任务
 - `getTaskStatus(taskId)` - 获取任务状态
 - `listTasks()` - 列出所有任务
-- `analyzeExperiment(data)` - AI实验助手分析
 - `pollTaskStatus(taskId, onProgress, interval)` - 轮询任务状态
 
 ### 2. 数据分析服务 (analysisAPI)
@@ -88,11 +86,11 @@ const analysis = await analysisAPI.analyzeData(
 在项目根目录创建 `.env` 文件：
 
 ```env
-# PySR服务地址
-VITE_PYSR_API_URL=http://localhost:8000
+# 绘图 + PySR 计算服务地址
+VITE_COMPUTE_API_URL=http://localhost:8000
 
-# 数据分析服务地址
-VITE_ANALYSIS_API_URL=http://localhost:8001
+# AI 问答服务地址
+VITE_AI_API_URL=http://localhost:8001
 ```
 
 ### 添加新服务
@@ -161,7 +159,7 @@ const result = await customClient.get('/endpoint')
 ```javascript
 import { createSilentClient, API_SERVICES } from '@/utils/api'
 
-const silentClient = createSilentClient(API_SERVICES.PYSR)
+const silentClient = createSilentClient(API_SERVICES.COMPUTE)
 
 try {
   const result = await silentClient.get('/api/tasks')
@@ -174,12 +172,17 @@ try {
 ### 流式响应处理（SSE）
 
 ```javascript
-import { pysrAPI } from '@/utils/api'
+import { API_SERVICES, API_ENDPOINTS } from '@/utils/api'
 
 // 获取流式响应
-const response = await pysrAPI.analyzeExperiment({
-  question: '请分析这个实验数据',
-  background: '单摆实验',
+const response = await fetch(`${API_SERVICES.AI.baseURL}${API_ENDPOINTS.AI.ANALYZE_EXPERIMENT}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    question: '请分析这个实验数据',
+    background: '单摆实验',
+    data_text: '0.1\t1.2\n0.2\t1.8',
+  }),
 })
 
 // 处理流式数据
@@ -189,10 +192,10 @@ const decoder = new TextDecoder()
 while (true) {
   const { done, value } = await reader.read()
   if (done) break
-  
+
   const chunk = decoder.decode(value)
   const lines = chunk.split('\n')
-  
+
   for (const line of lines) {
     if (line.startsWith('data: ')) {
       const data = JSON.parse(line.slice(6))

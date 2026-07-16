@@ -27,15 +27,18 @@ if getattr(sys, "frozen", False):
 else:
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from config import settings
+
 # 导入API路由（必须在 PROJECT_ROOT 设置后，以便 config 等可被找到）
 # 兼容两种运行方式：
 # - 作为包模块运行：python -m pysr_module.main / scripts.start_backend 导入 pysr_module.main
 # - 直接脚本运行：python pysr_module/main.py
-try:
-    # 优先使用包内相对导入（推荐方式）
+if __package__:
     from .api import app as api_app  # type: ignore
-except Exception:
-    # 回退：当作为脚本直接运行且无包上下文时
+else:
     from api import app as api_app
 
 DIST_DIR = os.path.join(PROJECT_ROOT, "dist")
@@ -51,14 +54,22 @@ app = FastAPI(
     version="1.0.0"
 )
 
+cors_origins = settings.CORS_ORIGINS
+cors_allow_credentials = settings.CORS_ALLOW_CREDENTIALS and "*" not in cors_origins
+
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"] if "*" in cors_origins else cors_origins,
+    allow_credentials=cors_allow_credentials,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
 )
+
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
 
 if HAS_FRONTEND_DIST:
     # 打包模式：API 在 /api，根路径提供 Vue SPA
@@ -88,20 +99,20 @@ def main():
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to run the service on")
     parser.add_argument("--port", type=int, default=8000, help="Port to run the service on")
     args = parser.parse_args()
-    
+
     print(f"Starting PySR Web Service on http://{args.host}:{args.port}")
     print("API endpoints available at:")
     print(f"  - http://{args.host}:{args.port}/")
     print("Press Ctrl+C to stop the server")
-    
+
     # 启动服务（关闭访问日志，只显示警告和错误）
     uvicorn.run(
-        app, 
-        host=args.host, 
+        app,
+        host=args.host,
         port=args.port,
         access_log=False,  # 关闭访问日志（GET/POST请求）
         log_level="warning"  # 只显示警告和错误
     )
 
 if __name__ == "__main__":
-    main() 
+    main()

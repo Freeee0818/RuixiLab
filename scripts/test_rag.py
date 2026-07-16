@@ -1,73 +1,90 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""Manual smoke test for dense, sparse, hybrid and reranked retrieval."""
 
-"""
-RAG 检索测试脚本：不调用大模型，只测试「根据问题检索到的文档片段」是否合理。
-用法（在项目根目录）：
-  python scripts/test_rag.py
-  python scripts/test_rag.py "单摆周期公式是什么"
-"""
+from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
+
 
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 os.chdir(project_root)
 
 from dotenv import load_dotenv
+
 load_dotenv(project_root / ".env")
 
-def main():
-    print("正在初始化 RAG 服务...")
+
+DEFAULT_QUESTIONS = [
+    "单摆周期公式是什么？",
+    "如何用 Tracker 做视频分析？",
+    "PySR 符号回归可以发现什么规律？",
+]
+
+
+def _print_results(question: str, mode: str, results: list[dict]) -> None:
+    print("\n" + "=" * 72)
+    print(f"问题: {question}")
+    print(f"模式: {mode}")
+    print("=" * 72)
+    if not results:
+        print("  (未检索到相关片段)")
+        return
+    for index, item in enumerate(results, 1):
+        metadata = item.get("metadata") or {}
+        location = metadata.get("page_label") or metadata.get("section_title") or ""
+        score = item.get("score")
+        dense_score = item.get("retrieval_score")
+        rerank_score = item.get("rerank_score")
+        print(
+            f"\n[{index}] {item.get('title')} {location} "
+            f"score={score:.4f} retrieval={dense_score:.4f} rerank={rerank_score}"
+        )
+        print(str(item.get("excerpt") or "")[:500].strip())
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="测试 GuideLab RAG v2 检索")
+    parser.add_argument("query", nargs="*", help="可选的单个检索问题")
+    parser.add_argument(
+        "--mode",
+        choices=("dense", "sparse", "hybrid", "hybrid_rerank"),
+        default="hybrid_rerank",
+    )
+    parser.add_argument("--compare", action="store_true", help="依次比较四种检索模式")
+    parser.add_argument("--top-k", type=int, default=5)
+    args = parser.parse_args()
+
     from rag_module.service import rag_service
 
-    if not rag_service.initialized:
-        rag_service.initialize()
+    rag_service.initialize()
+    count = rag_service.collection_count()
+    print(f"RAG collection={rag_service.collection_name}, points={count}")
+    if count == 0:
+        raise SystemExit("向量库为空，请先运行 python scripts/ingest_knowledge.py")
 
-    if not rag_service.initialized or rag_service.index is None:
-        print("RAG 初始化失败，请先运行: python scripts/ingest_knowledge.py")
-        sys.exit(1)
+    questions = [" ".join(args.query)] if args.query else DEFAULT_QUESTIONS
+    modes = (
+        ("dense", "sparse", "hybrid", "hybrid_rerank")
+        if args.compare
+        else (args.mode,)
+    )
+    try:
+        for question in questions:
+            for mode in modes:
+                results = rag_service.retrieve(
+                    question,
+                    top_k=args.top_k,
+                    mode=mode,
+                    rerank=mode == "hybrid_rerank",
+                )
+                _print_results(question, mode, results)
+    finally:
+        rag_service.close()
 
-    questions = [
-        "单摆周期公式是什么？",
-        "如何用 Tracker 做视频分析？",
-        "符号回归能做什么？",
-    ]
-
-    if len(sys.argv) > 1:
-        questions = [" ".join(sys.argv[1:])]
-
-    retriever = rag_service.index.as_retriever(similarity_top_k=3)
-
-    for q in questions:
-        print("\n" + "=" * 60)
-        print(f"问题: {q}")
-        print("=" * 60)
-        try:
-            nodes = retriever.retrieve(q)
-            if not nodes:
-                print("  (未检索到相关片段)")
-                continue
-            for i, node in enumerate(nodes, 1):
-                src = node.metadata.get("file_name", "未知")
-                score = getattr(node, "score", None)
-                score_str = f" 相似度={score:.4f}" if score is not None else ""
-                print(f"\n  [{i}] 来源: {src}{score_str}")
-                print(f"  {node.text[:300].strip()}...")
-        except Exception as e:
-            print(f"  检索异常: {e}")
-
-    print("\n若以上片段与问题相关，说明 RAG 训练/检索效果正常。")
-    print("可在分析页使用 AI 助手提问，会先走 RAG 再生成回答。")
-
-    # 显式关闭 Qdrant 客户端，避免退出时报 Exception ignored in: QdrantClient.__del__
-    if getattr(rag_service, "client", None) is not None:
-        try:
-            rag_service.client.close()
-        except Exception:
-            pass
 
 if __name__ == "__main__":
     main()
