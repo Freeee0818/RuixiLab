@@ -22,13 +22,16 @@ cp .env.example .env
 python -m pip install -r ai_module/requirements.txt
 bash start.sh
 curl http://127.0.0.1:8001/health
-curl http://127.0.0.1:8001/agent/capabilities
 ```
 
 Copy the same `CLASSROOM_SESSION_SECRET` used by the compute service into this
 `.env`. Keep `COMPUTE_SERVICE_URL=http://127.0.0.1:8000` when both services are
 on the same ECS. Run one Uvicorn worker: classroom conversations and request
 limits are process-local in this release.
+
+Invitation access is verified here but owned by the standalone access service.
+Follow `INVITATION_ACCESS.md` to deploy port 8002 and bootstrap the first
+administrator there.
 
 ```bash
 cd /www/wwwroot/guidelab_ai

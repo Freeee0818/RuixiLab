@@ -14,6 +14,7 @@ const TOOL_LABELS = {
   get_analysis_service_status: '查询分析服务负载',
   start_symbolic_regression: '提交 PySR 拟合任务',
   cancel_analysis_task: '取消 PySR 拟合任务',
+  self_correction: '根据错误修正调用',
 }
 
 function getConversationId() {
@@ -258,15 +259,60 @@ export function useChat(experimentInfo, apiKey, apiBaseUrl, modelName, dataConte
             streamingThinking.value += parsed.content
           } else if (parsed.type === 'tool' && parsed.tool) {
             const label = TOOL_LABELS[parsed.tool] || parsed.tool
-            streamingTools.value.push({
+            const status = parsed.phase === 'started'
+              ? 'running'
+              : (parsed.ok ? 'completed' : 'failed')
+            const callId = parsed.call_id || `${parsed.tool}-${parsed.sequence || Date.now()}`
+            const traceKey = `${parsed.run_id || 'agent'}:${callId}:${parsed.round || 0}`
+            const toolEvent = {
+              traceKey,
+              callId,
+              runId: parsed.run_id || '',
+              sequence: parsed.sequence || null,
               name: parsed.tool,
               label,
-              ok: Boolean(parsed.ok),
+              status,
+              ok: status === 'running' ? null : Boolean(parsed.ok),
               durationMs: Number.isFinite(parsed.duration_ms) ? parsed.duration_ms : null,
-            })
-            if (parsed.ok && parsed.tool === 'start_symbolic_regression' && parsed.task_id) {
+              round: parsed.round || null,
+              arguments: parsed.arguments || null,
+              error: parsed.error || '',
+              taskId: parsed.task_id || '',
+              model: parsed.model || '',
+              skill: parsed.skill || '',
+              timestamp: parsed.timestamp || '',
+            }
+            const existingIndex = streamingTools.value.findIndex(tool => tool.traceKey === toolEvent.traceKey)
+            if (existingIndex >= 0) {
+              streamingTools.value[existingIndex] = {
+                ...streamingTools.value[existingIndex],
+                ...toolEvent,
+              }
+            } else {
+              streamingTools.value.push(toolEvent)
+            }
+            if (status === 'completed' && parsed.tool === 'start_symbolic_regression' && parsed.task_id) {
               registerAgentTask(parsed.task_id)
             }
+          } else if (parsed.type === 'correction') {
+            streamingTools.value.push({
+              traceKey: `${parsed.run_id || 'agent'}:correction:${parsed.sequence || Date.now()}`,
+              callId: `correction-${parsed.sequence || Date.now()}`,
+              runId: parsed.run_id || '',
+              sequence: parsed.sequence || null,
+              name: 'self_correction',
+              label: TOOL_LABELS.self_correction,
+              status: 'completed',
+              ok: true,
+              durationMs: null,
+              round: parsed.round || null,
+              arguments: null,
+              error: '',
+              message: parsed.message || '',
+              model: parsed.model || '',
+              skill: parsed.skill || '',
+              timestamp: parsed.timestamp || '',
+            })
           } else {
             const content = parsed.content || parsed.choices?.[0]?.delta?.content
             if (content) streamingMessage.value += content

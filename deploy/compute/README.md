@@ -20,7 +20,6 @@ environment:
 python -m pip install -r analysis_module/requirements.txt
 bash start.sh
 curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/service-status
 ```
 
 The environment-variable file in BaoTa must be `.env`, not `requirements.txt`.
@@ -33,6 +32,8 @@ openssl rand -hex 32
 
 ```env
 CLASSROOM_SESSION_SECRET=<same value in compute and AI>
+ACCESS_CONTROL_ENABLED=true
+ACCESS_TRUSTED_NETWORKS=[]
 PYSR_MAX_RUNNING_TASKS_PER_SESSION=1
 PYSR_MAX_QUEUED_TASKS_PER_SESSION=2
 ```

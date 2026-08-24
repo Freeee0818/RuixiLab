@@ -5,6 +5,14 @@
 
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { accessControlEnabled, markAccessExpired } from '@/utils/access'
+
+function redirectToAccessPage() {
+  if (!accessControlEnabled || window.location.pathname === '/access') return
+  markAccessExpired()
+  const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.location.assign(`/access?redirect=${encodeURIComponent(redirect)}`)
+}
 
 /**
  * 创建服务专用的axios实例
@@ -73,7 +81,8 @@ export function createServiceClient(serviceConfig) {
             message = `请求参数错误: ${message}`
             break
           case 401:
-            message = '未授权，请先登录'
+            message = '访问凭证已失效，请重新登录'
+            redirectToAccessPage()
             break
           case 403:
             message = '权限不足'
@@ -142,4 +151,3 @@ export function createSilentClient(serviceConfig) {
 
   return client
 }
-

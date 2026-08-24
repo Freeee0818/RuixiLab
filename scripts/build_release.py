@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build clean, upload-ready GuideLab service archives.
+"""Build clean, upload-ready Ruixi Lab service archives.
 
 The release layer deliberately excludes local virtual environments, Julia
 binaries, runtime data, outputs, logs, caches, and secrets. Existing Julia and
@@ -64,6 +64,29 @@ class PackageSpec:
 
 PACKAGE_SPECS = (
     PackageSpec(
+        name="guidelab-docker",
+        sources=(
+            Source(".dockerignore"),
+            Source("README.md"),
+            Source("access_service"),
+            Source("ai_module"),
+            Source("analysis_module"),
+            Source("config"),
+            Source("pysr_module"),
+            Source("rag_module"),
+            Source("service_common"),
+            Source("scripts/ingest_knowledge.py"),
+            Source("scripts/test_rag.py"),
+            Source("scripts/evaluate_rag.py"),
+            Source("scripts/evaluate_agent_tools.py"),
+            Source("scripts/summarize_agent_experiment.py"),
+            Source("deploy/docker"),
+            Source("deploy/nginx/guidelab-locations.conf"),
+            Source("deploy/nginx/CLASSROOM_SECURITY.md"),
+            Source("docs/INVITATION_ACCESS.md"),
+        ),
+    ),
+    PackageSpec(
         name="guidelab-compute",
         sources=(
             Source("analysis_module"),
@@ -74,6 +97,19 @@ PACKAGE_SPECS = (
             Source("deploy/compute/.env.example", ".env.example"),
             Source("deploy/compute/start.sh", "start.sh"),
             Source("deploy/compute/README.md", "DEPLOY.md"),
+            Source("docs/INVITATION_ACCESS.md", "INVITATION_ACCESS.md"),
+        ),
+    ),
+    PackageSpec(
+        name="guidelab-access",
+        sources=(
+            Source("access_service"),
+            Source("config"),
+            Source("service_common"),
+            Source("deploy/access/.env.example", ".env.example"),
+            Source("deploy/access/start.sh", "start.sh"),
+            Source("deploy/access/README.md", "DEPLOY.md"),
+            Source("docs/INVITATION_ACCESS.md", "INVITATION_ACCESS.md"),
         ),
     ),
     PackageSpec(
@@ -86,9 +122,12 @@ PACKAGE_SPECS = (
             Source("scripts/ingest_knowledge.py"),
             Source("scripts/test_rag.py"),
             Source("scripts/evaluate_rag.py"),
+            Source("scripts/evaluate_agent_tools.py"),
+            Source("scripts/summarize_agent_experiment.py"),
             Source("deploy/ai/.env.example", ".env.example"),
             Source("deploy/ai/start.sh", "start.sh"),
             Source("deploy/ai/README.md", "DEPLOY.md"),
+            Source("docs/INVITATION_ACCESS.md", "INVITATION_ACCESS.md"),
         ),
     ),
     PackageSpec(
@@ -105,6 +144,7 @@ PACKAGE_SPECS = (
             Source("deploy/web/README.md", "DEPLOY.md"),
             Source("deploy/nginx/guidelab-locations.conf", "nginx/guidelab-locations.conf"),
             Source("deploy/nginx/CLASSROOM_SECURITY.md", "nginx/CLASSROOM_SECURITY.md"),
+            Source("docs/INVITATION_ACCESS.md", "INVITATION_ACCESS.md"),
         ),
     ),
 )
@@ -223,7 +263,7 @@ def build_release(formats: Sequence[str], skip_web_build: bool) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build GuideLab compute, AI, knowledge, and web release archives"
+        description="Build Ruixi Lab compute, AI, access, knowledge, and web release archives"
     )
     parser.add_argument(
         "--formats",

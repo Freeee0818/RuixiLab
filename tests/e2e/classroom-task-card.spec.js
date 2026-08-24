@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { allowAccess } from './helpers/access.js'
 
 test('Agent-created PySR task stays on its chat page and refreshes to completion', async ({ page }) => {
+  await allowAccess(page)
   let polls = 0
   const taskId = '11111111-2222-4333-8444-555555555555'
   const browserErrors = []
@@ -11,7 +13,11 @@ test('Agent-created PySR task stays on its chat page and refreshes to completion
 
   await page.route('**/analyze_experiment', async (route) => {
     const body = [
-      `data: {"type":"tool","tool":"start_symbolic_regression","ok":true,"duration_ms":8,"task_id":"${taskId}","status":"submitted"}`,
+      'data: {"type":"agent","phase":"started","run_id":"agent-e2e","model":"fake-model","skill":"symbolic_regression","sequence":1}',
+      '',
+      'data: {"type":"tool","phase":"started","tool":"start_symbolic_regression","call_id":"call-e2e","run_id":"agent-e2e","round":1,"arguments":{"niterations":100},"model":"fake-model","skill":"symbolic_regression","sequence":2}',
+      '',
+      `data: {"type":"tool","phase":"finished","tool":"start_symbolic_regression","call_id":"call-e2e","run_id":"agent-e2e","round":1,"arguments":{"niterations":100},"ok":true,"duration_ms":8,"task_id":"${taskId}","status":"submitted","model":"fake-model","skill":"symbolic_regression","sequence":3}`,
       '',
       'data: {"content":"拟合任务已经提交，页面会自动跟踪计算结果。"}',
       '',
@@ -54,6 +60,10 @@ test('Agent-created PySR task stays on its chat page and refreshes to completion
   const card = page.locator('.task-card').filter({ hasText: taskId })
   await expect(page.getByText('Agent 工具活动')).toBeVisible()
   await expect(page.getByText('提交 PySR 拟合任务', { exact: true })).toBeVisible()
+  await expect(page.getByText('第 1 轮')).toBeVisible()
+  await page.getByText('查看审计信息').click()
+  await expect(page.getByText('agent-e2e')).toBeVisible()
+  await expect(page.getByText(/"niterations": 100/)).toBeVisible()
   await expect(card).toBeVisible()
   await expect(card).toContainText('已完成', { timeout: 10_000 })
   await expect(card).toContainText('y = 2.0 * x')

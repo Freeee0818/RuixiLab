@@ -7,7 +7,7 @@
       </div>
       <div class="source-actions">
         <el-button type="primary" @click="loadDataFile" :disabled="disabled">选择数据文件</el-button>
-        <a :href="sampleDataUrl" download="GuideLab示例数据.csv">下载示例数据</a>
+        <a :href="sampleDataUrl" download="睿析实验示例数据.csv">下载示例数据</a>
       </div>
     </div>
     

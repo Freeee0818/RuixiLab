@@ -1,0 +1,232 @@
+{
+  "run_id": "qwen-plus-r1-20260820",
+  "created_at": "2026-08-20T12:26:10.678166+00:00",
+  "research_question": "外部 Skill、执行错误反馈与显式修复提示能否提升物理 Tool-Agent 可靠性？",
+  "hypothesis": "guided_repair 在恢复成功率和端到端成功率上优于 schema_only 与 skill_feedback。",
+  "dataset": {
+    "path": "F:\\桌面\\Freee\\GuideLab\\knowledge_base\\evaluation\\agent_tool_cases.jsonl",
+    "sha256": "f56cde270f5472440023252a1ee1fcbde3474df0e6be91689ee6431d3d864761",
+    "case_count": 40,
+    "categories": [
+      "cancel",
+      "fit",
+      "no_tool",
+      "recovery",
+      "service",
+      "status"
+    ]
+  },
+  "code": {
+    "commit": "63de5894b7187ae1c88f20e962d4b8afa6e46ffe",
+    "branch": "codex/docker-three-services",
+    "dirty": true
+  },
+  "environment": {
+    "python": "3.12.4 (tags/v3.12.4:8e8a4ba, Jun  6 2024, 19:30:16) [MSC v.1940 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "model": "qwen-plus",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  },
+  "config": {
+    "strategies": [
+      "schema_only",
+      "skill_feedback",
+      "guided_repair"
+    ],
+    "repetitions": 1,
+    "temperature": 0.0,
+    "enable_thinking": false,
+    "concurrency": 3,
+    "bootstrap_seed": 20260820,
+    "bootstrap_samples": 2000,
+    "tools_executed": false
+  },
+  "summaries": {
+    "schema_only": {
+      "case_runs": 40,
+      "request_failures": 0,
+      "metrics": {
+        "end_to_end_success_rate": {
+          "value": 0.825,
+          "ci95": [
+            0.7,
+            0.925
+          ],
+          "n": 40
+        },
+        "tool_decision_accuracy": {
+          "value": 0.825,
+          "ci95": [
+            0.7,
+            0.925
+          ],
+          "n": 40
+        },
+        "schema_valid_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 30
+        },
+        "argument_correct_rate": {
+          "value": 0.8214285714285714,
+          "ci95": [
+            0.6785714285714286,
+            0.9642857142857143
+          ],
+          "n": 28
+        },
+        "recovery_success_rate": {
+          "value": 0.3,
+          "ci95": [
+            0.0,
+            0.6
+          ],
+          "n": 10
+        },
+        "unnecessary_call_rate": {
+          "value": 0.16666666666666666,
+          "ci95": [
+            0.0,
+            0.4166666666666667
+          ],
+          "n": 12
+        },
+        "latency_mean_ms": {
+          "value": 2601.9615,
+          "ci95": [
+            1761.4582500000001,
+            3547.93425
+          ],
+          "n": 40
+        }
+      }
+    },
+    "skill_feedback": {
+      "case_runs": 40,
+      "request_failures": 0,
+      "metrics": {
+        "end_to_end_success_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 40
+        },
+        "tool_decision_accuracy": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 40
+        },
+        "schema_valid_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 28
+        },
+        "argument_correct_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 28
+        },
+        "recovery_success_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 10
+        },
+        "unnecessary_call_rate": {
+          "value": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n": 12
+        },
+        "latency_mean_ms": {
+          "value": 2678.537,
+          "ci95": [
+            1793.929,
+            3767.7877500000004
+          ],
+          "n": 40
+        }
+      }
+    },
+    "guided_repair": {
+      "case_runs": 40,
+      "request_failures": 0,
+      "metrics": {
+        "end_to_end_success_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 40
+        },
+        "tool_decision_accuracy": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 40
+        },
+        "schema_valid_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 28
+        },
+        "argument_correct_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 28
+        },
+        "recovery_success_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 10
+        },
+        "unnecessary_call_rate": {
+          "value": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n": 12
+        },
+        "latency_mean_ms": {
+          "value": 2837.8765,
+          "ci95": [
+            1944.3395,
+            3844.39275
+          ],
+          "n": 40
+        }
+      }
+    }
+  }
+}

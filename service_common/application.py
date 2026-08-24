@@ -8,6 +8,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
+from .access import AccessControlMiddleware
 from .session import ClassroomSessionMiddleware, classroom_security_warning
 
 
@@ -32,6 +33,7 @@ def create_service_app(
         logging.getLogger(__name__).warning(warning)
 
     app.add_middleware(ClassroomSessionMiddleware)
+    app.add_middleware(AccessControlMiddleware)
 
     cors_origins = settings.CORS_ORIGINS
     app.add_middleware(

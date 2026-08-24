@@ -1,7 +1,7 @@
 <template>
   <footer class="app-footer">
     <div class="footer-container">
-      <span class="platform-name">睿析实验数据分析平台</span>
+      <span class="platform-name">睿析实验 · AI赋能的物理实验教学平台</span>
       <span class="footer-divider">|</span>
       <a
         href="https://beian.miit.gov.cn/"

@@ -8,6 +8,8 @@ const COMPUTE_BASE_URL = import.meta.env.VITE_COMPUTE_API_URL
   || (import.meta.env.PROD ? '/api' : 'http://localhost:8000')
 const AI_BASE_URL = import.meta.env.VITE_AI_API_URL
   || (import.meta.env.PROD ? '/ai' : 'http://localhost:8001')
+const ACCESS_BASE_URL = import.meta.env.VITE_ACCESS_API_URL
+  || (import.meta.env.PROD ? '/auth' : 'http://localhost:8002/auth')
 
 const COMPUTE_SERVICE = {
   name: 'Compute Service',
@@ -29,6 +31,11 @@ export const API_SERVICES = {
     name: 'AI Assistant Service',
     baseURL: AI_BASE_URL,
     timeout: 120000,
+  },
+  ACCESS: {
+    name: 'Access Service',
+    baseURL: ACCESS_BASE_URL,
+    timeout: 15000,
   },
 }
 

@@ -1,0 +1,230 @@
+{
+  "run_id": "qwen-plus-recovery-r3-20260820",
+  "created_at": "2026-08-20T12:29:39.965941+00:00",
+  "research_question": "外部 Skill、执行错误反馈与显式修复提示能否提升物理 Tool-Agent 可靠性？",
+  "hypothesis": "guided_repair 在恢复成功率和端到端成功率上优于 schema_only 与 skill_feedback。",
+  "dataset": {
+    "path": "F:\\桌面\\Freee\\GuideLab\\knowledge_base\\evaluation\\agent_tool_cases.jsonl",
+    "sha256": "f56cde270f5472440023252a1ee1fcbde3474df0e6be91689ee6431d3d864761",
+    "case_count": 10,
+    "categories": [
+      "recovery"
+    ]
+  },
+  "code": {
+    "commit": "63de5894b7187ae1c88f20e962d4b8afa6e46ffe",
+    "branch": "codex/docker-three-services",
+    "dirty": true
+  },
+  "environment": {
+    "python": "3.12.4 (tags/v3.12.4:8e8a4ba, Jun  6 2024, 19:30:16) [MSC v.1940 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "model": "qwen-plus",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  },
+  "config": {
+    "strategies": [
+      "schema_only",
+      "skill_feedback",
+      "guided_repair"
+    ],
+    "repetitions": 3,
+    "temperature": 0.0,
+    "enable_thinking": false,
+    "concurrency": 3,
+    "bootstrap_seed": 20260820,
+    "bootstrap_samples": 2000,
+    "tools_executed": false,
+    "category_filter": [
+      "recovery"
+    ]
+  },
+  "summaries": {
+    "schema_only": {
+      "case_runs": 30,
+      "request_failures": 0,
+      "metrics": {
+        "end_to_end_success_rate": {
+          "value": 0.16666666666666666,
+          "ci95": [
+            0.03333333333333333,
+            0.3
+          ],
+          "n": 30
+        },
+        "tool_decision_accuracy": {
+          "value": 0.16666666666666666,
+          "ci95": [
+            0.03333333333333333,
+            0.3
+          ],
+          "n": 30
+        },
+        "schema_valid_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 21
+        },
+        "argument_correct_rate": {
+          "value": 0.09523809523809523,
+          "ci95": [
+            0.0,
+            0.23809523809523808
+          ],
+          "n": 21
+        },
+        "recovery_success_rate": {
+          "value": 0.16666666666666666,
+          "ci95": [
+            0.03333333333333333,
+            0.3
+          ],
+          "n": 30
+        },
+        "unnecessary_call_rate": {
+          "value": 0.6666666666666666,
+          "ci95": [
+            0.3333333333333333,
+            0.8888888888888888
+          ],
+          "n": 9
+        },
+        "latency_mean_ms": {
+          "value": 2275.045,
+          "ci95": [
+            1782.8660000000002,
+            2841.8476666666666
+          ],
+          "n": 30
+        }
+      }
+    },
+    "skill_feedback": {
+      "case_runs": 30,
+      "request_failures": 0,
+      "metrics": {
+        "end_to_end_success_rate": {
+          "value": 0.9666666666666667,
+          "ci95": [
+            0.9,
+            1.0
+          ],
+          "n": 30
+        },
+        "tool_decision_accuracy": {
+          "value": 0.9666666666666667,
+          "ci95": [
+            0.9,
+            1.0
+          ],
+          "n": 30
+        },
+        "schema_valid_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 20
+        },
+        "argument_correct_rate": {
+          "value": 0.9523809523809523,
+          "ci95": [
+            0.8571428571428571,
+            1.0
+          ],
+          "n": 21
+        },
+        "recovery_success_rate": {
+          "value": 0.9666666666666667,
+          "ci95": [
+            0.9,
+            1.0
+          ],
+          "n": 30
+        },
+        "unnecessary_call_rate": {
+          "value": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n": 9
+        },
+        "latency_mean_ms": {
+          "value": 1530.9623333333334,
+          "ci95": [
+            1142.142,
+            1998.4496666666666
+          ],
+          "n": 30
+        }
+      }
+    },
+    "guided_repair": {
+      "case_runs": 30,
+      "request_failures": 0,
+      "metrics": {
+        "end_to_end_success_rate": {
+          "value": 0.9666666666666667,
+          "ci95": [
+            0.9,
+            1.0
+          ],
+          "n": 30
+        },
+        "tool_decision_accuracy": {
+          "value": 0.9666666666666667,
+          "ci95": [
+            0.9,
+            1.0
+          ],
+          "n": 30
+        },
+        "schema_valid_rate": {
+          "value": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "n": 20
+        },
+        "argument_correct_rate": {
+          "value": 0.9523809523809523,
+          "ci95": [
+            0.8571428571428571,
+            1.0
+          ],
+          "n": 21
+        },
+        "recovery_success_rate": {
+          "value": 0.9666666666666667,
+          "ci95": [
+            0.9,
+            1.0
+          ],
+          "n": 30
+        },
+        "unnecessary_call_rate": {
+          "value": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n": 9
+        },
+        "latency_mean_ms": {
+          "value": 2183.1233333333334,
+          "ci95": [
+            1818.6786666666667,
+            2555.752
+          ],
+          "n": 30
+        }
+      }
+    }
+  }
+}

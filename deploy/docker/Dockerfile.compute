@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1.7
+ARG JULIA_VERSION=1.11.9
+FROM julia:${JULIA_VERSION}-bookworm AS julia-runtime
+
+FROM python:3.12-slim-bookworm
+
+COPY --from=julia-runtime /usr/local/julia /usr/local/julia
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH=/opt/venv/bin:/usr/local/julia/bin:$PATH \
+    PYTHON_JULIACALL_BINDIR=/usr/local/julia/bin \
+    JULIA_DEPOT_PATH=/home/guidelab/.julia \
+    MPLCONFIGDIR=/home/guidelab/.cache/matplotlib
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        fontconfig \
+        fonts-noto-cjk \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m venv /opt/venv
+
+WORKDIR /app
+COPY analysis_module/requirements.txt analysis_module/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && pip install -r analysis_module/requirements.txt
+
+RUN groupadd --gid 10001 guidelab \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin guidelab \
+    && mkdir -p /var/lib/guidelab-compute/logs /home/guidelab/.cache/matplotlib /app/outputs \
+    && chown -R 10001:10001 /opt/venv /home/guidelab /var/lib/guidelab-compute /app/outputs
+
+USER 10001:10001
+RUN python -c "import pysr; pysr.load_all_packages(); print('PySR Julia packages ready:', pysr.__version__)"
+
+COPY --chown=10001:10001 config config
+COPY --chown=10001:10001 service_common service_common
+COPY --chown=10001:10001 analysis_module analysis_module
+COPY --chown=10001:10001 pysr_module pysr_module
+
+EXPOSE 8000
+CMD ["python", "-m", "analysis_module.main", "--host", "0.0.0.0", "--port", "8000"]

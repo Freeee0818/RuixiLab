@@ -1,8 +1,8 @@
-# GuideLab · 物理实验 Agent 工作台
+# 睿析实验 · AI赋能的物理实验教学平台
 
-GuideLab 是面向高校物理实验课堂的智能分析平台。学生可以在同一工作台中整理实验数据、生成统计图表、运行 PySR 符号回归，并让 Agent 检索课程资料、解释实验现象或直接调用计算工具。
+睿析实验（项目代号 GuideLab）是面向高校物理实验课堂的智能分析平台。学生可以在同一工作台中整理实验数据、生成统计图表、运行 PySR 符号回归，并让 Agent 检索课程资料、解释实验现象或直接调用计算工具。
 
-项目采用 **Web + 计算服务 + AI 服务** 的拆分架构：PySR 与 Julia 只部署在计算端，AI 问答与 RAG 可以独立运行和扩容。
+项目采用 **Web + 计算服务 + AI 服务 + 账号服务** 的拆分架构：PySR 与 Julia 只部署在计算端，AI 问答与 RAG 可以独立运行和扩容，登录与账号数据库也不再依赖 AI 进程。
 
 ![GuideLab 分析工作台](docs/assets/guidelab-workbench.png)
 
@@ -62,11 +62,12 @@ GET /agent/capabilities
 
 - **双工作区前端**：实验分析与 Agent 问答在桌面端 1:1 分屏，移动端按双标签切换。
 - **数据分析**：散点图、折线图、柱状图、箱线图、热力图、趋势线与统计摘要。
-- **PySR 符号回归**：并发任务队列、进度查询、取消、候选方程和拟合图。
+- **PySR 符号回归**：并发任务队列、候选方程与拟合图；按 R²、归一化 RMSE、MAE、有效覆盖和复杂度风险生成透明的样本内合理性诊断。
 - **混合 RAG**：BGE-M3 同时生成 dense/sparse 向量，Qdrant 使用 RRF 融合，再由 BGE reranker 重排。
 - **数据直连 Agent**：分析页中的完整数据保留在服务端 Tool 上下文，模型只接收受限预览。
 - **课堂多用户隔离**：HttpOnly 签名会话、按学生限流、任务所有权检查和会话级队列限制。
-- **双后端独立部署**：AI 服务不导入 PySR，也不需要安装 Julia。
+- **邀请制访问**：师生账号登录、网页管理员开户/停用/重置密码，并支持经确认的校园网 CIDR 免登录。
+- **三后端独立部署**：计算、AI 与账号服务分别运行，AI 服务不导入 PySR，账号服务也不加载模型。
 
 ## 系统架构
 
@@ -74,14 +75,19 @@ GET /agent/capabilities
 flowchart TB
     B[Vue 3 前端] -->|/api| N[Nginx]
     B -->|/ai| N
+    B -->|/auth| N
     N -->|8000| C[计算服务]
     N -->|8001| A[AI 服务]
+    N -->|8002| X[账号服务]
     C --> P[绘图与统计]
     C --> J[PySR / Julia Worker]
     A --> G[Agent Runner]
     G --> Q[LLM OpenAI-compatible API]
     G --> R[RAG / Qdrant]
     G -->|私网 HTTP + 会话令牌| C
+    X --> D[(SQLite 账号库)]
+    X -.签发共享 Cookie.-> C
+    X -.签发共享 Cookie.-> A
 ```
 
 | 模块 | 默认端口 | 职责 |
@@ -89,6 +95,7 @@ flowchart TB
 | Vue Web | 5173 | 数据编辑、分析配置、结果展示、Agent 对话与任务追踪 |
 | Compute API | 8000 | 绘图、统计、PySR 调度和 Julia Worker |
 | AI API | 8001 | 问答、Agent、Skill/Tool、RAG 与课堂限流 |
+| Access API | 8002 | 邀请账号、登录会话、校园网放行与管理员开户 |
 
 ## 快速开始
 
@@ -107,7 +114,7 @@ cd RuixiLab
 cp .env.example .env
 ```
 
-至少配置一个 OpenAI-compatible 模型服务，并让两个后端使用相同的课堂密钥：
+至少配置一个 OpenAI-compatible 模型服务，并让三个后端使用相同的课堂密钥：
 
 ```env
 AI_API_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
@@ -115,11 +122,24 @@ AI_API_KEY=your-key
 AI_API_MODEL=qwen3-max
 
 CLASSROOM_SESSION_SECRET=use-openssl-rand-hex-32
+ACCESS_CONTROL_ENABLED=true
+ACCESS_ADMIN_EMAIL=wangcheng308@bupt.edu.cn
 COMPUTE_SERVICE_URL=http://127.0.0.1:8000
 RAG_ENABLE_TOOL=false
 ```
 
-### 2. 启动计算服务
+### 2. 启动账号服务
+
+账号环境只需要 FastAPI 和 SQLite：
+
+```bash
+python -m venv .venv-access
+source .venv-access/bin/activate
+python -m pip install -r access_service/requirements.txt
+python -m access_service.main --port 8002
+```
+
+### 3. 启动计算服务
 
 建议为计算端创建独立虚拟环境：
 
@@ -136,7 +156,7 @@ Windows PowerShell 激活命令：
 .\.venv-compute\Scripts\Activate.ps1
 ```
 
-### 3. 启动 AI 服务
+### 4. 启动 AI 服务
 
 AI 环境无需安装 Julia 或 PySR：
 
@@ -147,19 +167,25 @@ python -m pip install -r ai_module/requirements.txt
 python -m ai_module.main --port 8001
 ```
 
-### 4. 启动前端
+### 5. 启动前端
 
 ```bash
 npm install
 npm run dev
 ```
 
-开发环境默认访问 `http://localhost:8000` 与 `http://localhost:8001`。生产环境通过下面两个构建变量指向 Nginx 路由：
+开发环境默认访问 8000、8001 与 8002。生产环境通过下面三个构建变量指向 Nginx 路由：
 
 ```env
 VITE_COMPUTE_API_URL=/api
 VITE_AI_API_URL=/ai
+VITE_ACCESS_API_URL=/auth
+VITE_ACCESS_CONTROL_ENABLED=true
 ```
+
+生产环境首次管理员、账号审核、HTTPS 和校园网白名单配置见 [邀请制上线指南](docs/INVITATION_ACCESS.md)。
+
+如果三个后端部署在同一台服务器，推荐使用 [三后端 Docker 上线手册](deploy/docker/README.md)，其中包含 16 核 / 32 GB 资源配置、旧账号库迁移、RAG 模型挂载和回滚流程。
 
 ## 启用混合 RAG
 
@@ -216,7 +242,7 @@ npm run test:e2e
 # Python 回归测试
 python -m unittest discover -s tests -p "test_*.py" -v
 
-# 生成 Compute、AI、Knowledge 与 Web 上传包
+# 生成 Compute、AI、Access、Knowledge 与 Web 上传包
 python scripts/build_release.py
 ```
 
@@ -227,11 +253,13 @@ curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/service-status
 curl http://127.0.0.1:8001/health
 curl http://127.0.0.1:8001/agent/capabilities
+curl http://127.0.0.1:8002/health
+curl http://127.0.0.1:8002/auth/session
 ```
 
 ## 部署文档
 
-- [双后端拆分部署](docs/BACKEND_SPLIT.md)
+- [三后端拆分部署](docs/BACKEND_SPLIT.md)
 - [阿里云 RAG 部署](docs/ALIYUN_RAG_DEPLOYMENT.md)
 - [阿里云后端检查清单](docs/ALIYUN_BACKEND_DEPLOY_CHECKLIST.md)
 - [Agent Skill 与 Tool 扩展](docs/AGENT_SKILLS_AND_TOOLS.md)
@@ -241,6 +269,6 @@ curl http://127.0.0.1:8001/agent/capabilities
 ## 配置提醒
 
 - 不要提交 `.env`、模型 API Key、课堂密钥、向量库或学生数据。
-- 生产环境应只公开 80/443；8000/8001 由 Nginx 在本机或私网反向代理。
+- 生产环境应只公开 80/443；8000/8001/8002 由 Nginx 在本机或私网反向代理。
 - 本地 Qdrant 文件模式只能由一个 AI 进程持有；入库时先停止 AI 服务。
 - PySR 的并发度同时受 CPU 核数、Julia 线程数和单任务内存影响，调整后应先做压力测试。

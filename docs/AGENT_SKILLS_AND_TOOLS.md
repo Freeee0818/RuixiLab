@@ -114,3 +114,21 @@ python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 Agent 测试使用假的模型响应，不消耗外部模型额度；调度测试也不启动 Julia。
+
+评测真实模型的 Tool 选择、参数 Schema 通过率和失败修复能力时，可运行：
+
+```bash
+python scripts/evaluate_agent_tools.py --run-id qwen-plus-r1
+python scripts/summarize_agent_experiment.py experiments/agent_tools/runs/qwen-plus-r1
+```
+
+该脚本只向模型发送 Tool Schema 并读取模型选择，不执行任何 Tool，因此不会创建 PySR
+任务或修改课堂队列。评测集位于
+`knowledge_base/evaluation/agent_tool_cases.jsonl`，可以继续补充正常调用、无需调用、
+参数越界和失败修复案例。当前最小基准包含 40 个案例和 `schema_only`、
+`skill_feedback`、`guided_repair` 三组消融策略。原始结果、置信区间、CSV、SVG、实验日志和
+简历表述候选分别保存，完整协议见 `docs/AGENT_EXPERIMENT_PROTOCOL.md`。
+
+Runner 会为每次执行生成 `run_id`，并在 Tool SSE 事件中附带调用 ID、轮次、脱敏参数、
+模型、Skill、时间戳、耗时和错误。参数或执行失败时会注入显式修复指令；完全相同的失败调用
+不会再次执行。

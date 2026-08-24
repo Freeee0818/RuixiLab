@@ -9,13 +9,16 @@ Before uploading the new service packages:
    openssl rand -hex 32
    ```
 
-2. Put the exact same value in both service `.env` files:
+2. Put the exact same value in the access, AI, and compute `.env` files:
 
    ```env
    CLASSROOM_SESSION_SECRET=<same 64-character value>
    CLASSROOM_SESSION_COOKIE_SECURE=true
    CLASSROOM_SESSION_COOKIE_SAMESITE=lax
    CORS_ALLOW_CREDENTIALS=true
+   ACCESS_CONTROL_ENABLED=true
+   ACCESS_COOKIE_NAME=guidelab_access
+   ACCESS_TRUSTED_NETWORKS=[]
    ```
 
 3. Configure the AI service to call compute over the private loopback address:
@@ -32,15 +35,19 @@ Before uploading the new service packages:
    public proxy intentionally clears `X-GuideLab-Session`; only the private AI
    to compute request may use that internal bearer header.
 
-Validation:
+The access-control values above must be identical in all three services. Create
+the first administrator in the access service by following
+`../../docs/INVITATION_ACCESS.md`.
+
+Validation before login:
 
 ```bash
 curl -I https://ruixi.tech/
-curl -c /tmp/student-a.cookie -b /tmp/student-a.cookie \
-  https://ruixi.tech/api/service-status
-curl -c /tmp/student-b.cookie -b /tmp/student-b.cookie \
-  https://ruixi.tech/api/service-status
+curl -i https://ruixi.tech/auth/session
+curl -i https://ruixi.tech/api/service-status
 ```
 
-The two cookie files must contain different `guidelab_classroom_session`
-values. Never print or share these values in screenshots.
+The session endpoint should report `authenticated: false` outside an approved
+campus network, and the protected compute endpoint should return HTTP 401.
+Complete the browser login and then verify plotting, PySR, and Agent requests.
+Never print or share cookie values in screenshots.

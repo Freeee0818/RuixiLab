@@ -91,6 +91,9 @@ VITE_COMPUTE_API_URL=http://localhost:8000
 
 # AI 问答服务地址
 VITE_AI_API_URL=http://localhost:8001
+
+# 独立账号服务地址
+VITE_ACCESS_API_URL=http://localhost:8002/auth
 ```
 
 ### 添加新服务
@@ -102,7 +105,7 @@ export const API_SERVICES = {
   // ... 现有服务
   NEW_SERVICE: {
     name: 'New Service',
-    baseURL: import.meta.env.VITE_NEW_SERVICE_API_URL || 'http://localhost:8002',
+    baseURL: import.meta.env.VITE_NEW_SERVICE_API_URL || 'http://localhost:8003',
     timeout: 10000,
   },
 }
@@ -290,4 +293,3 @@ A: 不需要。旧的 `api.js` 和 `PySRClient` 已更新为适配器，保持�
 
 **Q: 如何调试API请求？**
 A: 开发环境下会自动在控制台输出请求日志。
-

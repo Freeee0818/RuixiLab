@@ -1,0 +1,6 @@
+# 独立账号与访问控制服务；不包含 AI、RAG、PySR 或 Julia 依赖。
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0

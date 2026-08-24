@@ -1,0 +1,114 @@
+name: ${COMPOSE_PROJECT_NAME:-ruixi-lab}
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  init: true
+  networks:
+    - backend
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  ulimits:
+    nofile:
+      soft: 65536
+      hard: 65536
+
+x-healthcheck: &healthcheck
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 20s
+
+services:
+  access:
+    <<: *service-defaults
+    image: ${GUIDELAB_ACCESS_IMAGE:-ruixi-lab-access:local}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.access
+    env_file:
+      - ./env/common.env
+      - ./env/access.env
+    environment:
+      ACCESS_SERVICE_HOST: 0.0.0.0
+      ACCESS_SERVICE_PORT: "8002"
+    ports:
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - type: bind
+        source: ${GUIDELAB_ACCESS_DATA:-/var/lib/guidelab-access}
+        target: /var/lib/guidelab-access
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+    cpus: 0.5
+    mem_limit: 512m
+    pids_limit: 128
+
+  compute:
+    <<: *service-defaults
+    image: ${GUIDELAB_COMPUTE_IMAGE:-ruixi-lab-compute:local}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.compute
+      args:
+        JULIA_VERSION: ${JULIA_VERSION:-1.11.9}
+    env_file:
+      - ./env/common.env
+      - ./env/compute.env
+    environment:
+      COMPUTE_SERVICE_HOST: 0.0.0.0
+      COMPUTE_SERVICE_PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - type: bind
+        source: ${GUIDELAB_COMPUTE_DATA:-/var/lib/guidelab-compute}
+        target: /var/lib/guidelab-compute
+      # PySR itself defaults to a relative `outputs` directory under /app.
+      # Mount it into the persistent writable compute tree for the non-root worker.
+      - type: bind
+        source: ${GUIDELAB_COMPUTE_DATA:-/var/lib/guidelab-compute}/pysr/engine
+        target: /app/outputs
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      start_period: 60s
+    cpus: 12.0
+    mem_limit: 18g
+    pids_limit: 512
+    shm_size: 1g
+    stop_grace_period: 60s
+
+  ai:
+    <<: *service-defaults
+    image: ${GUIDELAB_AI_IMAGE:-ruixi-lab-ai:local}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.ai
+    env_file:
+      - ./env/common.env
+      - ./env/ai.env
+    environment:
+      AI_SERVICE_HOST: 0.0.0.0
+      AI_SERVICE_PORT: "8001"
+      COMPUTE_SERVICE_URL: http://compute:8000
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - type: bind
+        source: ${GUIDELAB_AI_DATA:-/var/lib/guidelab-ai}
+        target: /var/lib/guidelab-ai
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      start_period: 60s
+    cpus: 3.0
+    mem_limit: 10g
+    pids_limit: 512
+    stop_grace_period: 45s
+
+networks:
+  backend:
+    driver: bridge

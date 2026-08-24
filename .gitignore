@@ -32,6 +32,11 @@ ENV/
 env/
 .venv
 
+# Docker deployment templates live in a directory named `env`; keep only the
+# examples in Git while the copied secret-bearing files remain ignored.
+!deploy/docker/env/
+!deploy/docker/env/*.env.example
+
 # ==================== 日志文件 ====================
 logs/
 *.log

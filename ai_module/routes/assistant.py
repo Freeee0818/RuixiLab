@@ -3,6 +3,7 @@
 
 """Standalone AI assistant, RAG, and Agent routes."""
 
+import asyncio
 import json
 import logging
 import threading
@@ -316,8 +317,13 @@ async def analyze_experiment(input_data: ExperimentInput, request: Request):
                     )
 
         async def generate_agent_stream():
-            try:
-                result = await AGENT_RUNNER.run(
+            event_queue: "asyncio.Queue[Dict[str, Any]]" = asyncio.Queue()
+
+            async def on_agent_event(event: Dict[str, Any]) -> None:
+                await event_queue.put(event)
+
+            runner_task = asyncio.create_task(
+                AGENT_RUNNER.run(
                     system_prompt=SYSTEM_PROMPT,
                     messages=history + [{"role": "user", "content": user_content}],
                     skill_name=input_data.skill or "physics_experiment",
@@ -331,15 +337,26 @@ async def analyze_experiment(input_data: ExperimentInput, request: Request):
                         "session_token": classroom_session.token,
                         "owner_id": classroom_session.session_id,
                     },
+                    on_event=on_agent_event,
                 )
+            )
+            try:
+                while not runner_task.done() or not event_queue.empty():
+                    try:
+                        event = await asyncio.wait_for(event_queue.get(), timeout=0.1)
+                    except asyncio.TimeoutError:
+                        continue
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                result = await runner_task
             except Exception as exc:
                 logger.warning("Agent tool loop unavailable, falling back to streaming chat: %s", exc)
                 async for event in generate_stream():
                     yield event
                 return
+            finally:
+                if not runner_task.done():
+                    runner_task.cancel()
 
-            for trace_item in result.trace:
-                yield f"data: {json.dumps({'type': 'tool', **trace_item}, ensure_ascii=False)}\n\n"
             if result.reasoning:
                 yield f"data: {json.dumps({'type': 'thinking', 'content': result.reasoning}, ensure_ascii=False)}\n\n"
             for chunk in _content_chunks(result.content):

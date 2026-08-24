@@ -32,7 +32,14 @@
             >
               <div class="equation-header">
                 <span class="equation-title">方程 {{ index + 1 }}</span>
-                <span v-if="eq.is_best" class="best-tag">最佳</span>
+                <div class="equation-tags">
+                  <span
+                    v-if="eq.rationality"
+                    class="assessment-tag"
+                    :class="`assessment-${eq.rationality.status}`"
+                  >{{ eq.rationality.label }}</span>
+                  <span v-if="eq.is_best" class="best-tag">最佳</span>
+                </div>
               </div>
               <div class="equation-content">
                 <div class="equation-formula">{{ eq.equation }}</div>
@@ -70,9 +77,55 @@
               <h5>方程: {{ result.equations[selectedIndex]?.equation }}</h5>
               <p>
                 复杂度: {{ result.equations[selectedIndex]?.complexity }} |
-                得分: {{ result.equations[selectedIndex]?.score.toFixed(6) }}
+                得分: {{ result.equations[selectedIndex]?.score.toFixed(6) }} |
+                Loss: {{ formatMetric(result.equations[selectedIndex]?.loss, 6) }}
               </p>
             </div>
+            <section v-if="selectedAssessment" class="rationality-panel">
+              <div class="rationality-heading">
+                <div>
+                  <span class="eyebrow">FIT DIAGNOSTICS</span>
+                  <h5>拟合合理性评价</h5>
+                </div>
+                <span
+                  class="assessment-tag assessment-prominent"
+                  :class="`assessment-${selectedAssessment.status}`"
+                >{{ selectedAssessment.label }}</span>
+              </div>
+
+              <div class="metrics-grid">
+                <div class="metric-item">
+                  <span>样本内 R²</span>
+                  <strong>{{ formatMetric(selectedAssessment.metrics?.r2) }}</strong>
+                </div>
+                <div class="metric-item">
+                  <span>归一化 RMSE</span>
+                  <strong>{{ formatMetric(selectedAssessment.metrics?.nrmse) }}</strong>
+                </div>
+                <div class="metric-item">
+                  <span>MAE</span>
+                  <strong>{{ formatMetric(selectedAssessment.metrics?.mae) }}</strong>
+                </div>
+                <div class="metric-item">
+                  <span>有效覆盖</span>
+                  <strong>{{ formatPercent(selectedAssessment.metrics?.coverage) }}</strong>
+                </div>
+              </div>
+
+              <div v-if="selectedAssessment.evidence?.length" class="diagnostic-list evidence-list">
+                <strong>数据支持</strong>
+                <ul>
+                  <li v-for="item in selectedAssessment.evidence" :key="item">{{ item }}</li>
+                </ul>
+              </div>
+              <div v-if="selectedAssessment.risks?.length" class="diagnostic-list risk-list">
+                <strong>风险提示</strong>
+                <ul>
+                  <li v-for="item in selectedAssessment.risks" :key="item">{{ item }}</li>
+                </ul>
+              </div>
+              <p class="evaluation-boundary">{{ selectedAssessment.boundary }}</p>
+            </section>
           </div>
 
           <div v-else class="all-equations-plot">
@@ -142,6 +195,22 @@ export default {
   },
 
   emits: ['select-equation'],
+
+  computed: {
+    selectedAssessment() {
+      if (this.selectedIndex === null) return null
+      return this.result?.equations?.[this.selectedIndex]?.rationality || null
+    },
+  },
+
+  methods: {
+    formatMetric(value, digits = 3) {
+      return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—'
+    },
+    formatPercent(value) {
+      return Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : '—'
+    },
+  },
 }
 </script>
 
@@ -280,6 +349,38 @@ export default {
   font-weight: 600;
 }
 
+.equation-tags {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.assessment-tag {
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.assessment-strong {
+  color: #12633b;
+  background: #e7f7ee;
+}
+
+.assessment-moderate {
+  color: #805412;
+  background: #fff4d8;
+}
+
+.assessment-weak,
+.assessment-unavailable {
+  color: #8a3b35;
+  background: #fdeceb;
+}
+
 .equation-content {
   padding: 16px;
 }
@@ -351,6 +452,101 @@ export default {
 .equation-details p {
   margin: 0;
   color: #7f8c8d;
+}
+
+.rationality-panel {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid #dbe4f2;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fbfdff 0%, #f5f8fc 100%);
+}
+
+.rationality-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.rationality-heading h5 {
+  margin: 2px 0 0;
+  color: #1f2d3d;
+  font-size: 16px;
+}
+
+.eyebrow {
+  color: #70829a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.assessment-prominent {
+  padding: 6px 11px;
+  font-size: 12px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric-item {
+  padding: 10px;
+  border: 1px solid #e1e8f1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.metric-item span,
+.metric-item strong {
+  display: block;
+}
+
+.metric-item span {
+  margin-bottom: 4px;
+  color: #708095;
+  font-size: 11px;
+}
+
+.metric-item strong {
+  color: #223247;
+  font-size: 16px;
+}
+
+.diagnostic-list {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.diagnostic-list ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
+}
+
+.evidence-list {
+  color: #24593e;
+  background: #edf8f2;
+}
+
+.risk-list {
+  color: #785126;
+  background: #fff7e8;
+}
+
+.evaluation-boundary {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed #cdd8e6;
+  color: #697b91;
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .plot-instruction {
@@ -429,5 +625,10 @@ export default {
     flex-direction: column;
   }
 }
-</style>
 
+@media (max-width: 720px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { allowAccess } from './helpers/access.js'
 
 async function openWorkbench(page) {
+  await allowAccess(page)
   await page.request.get('/', { timeout: 60_000 })
   await page.goto('/analysis', { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await expect(page.getByRole('heading', { name: '实验分析工作台' })).toBeVisible()
@@ -23,6 +25,8 @@ test('desktop workbench gives analysis and Agent equal width', async ({ page }) 
   expect(Math.abs(analysisBox.width - agentBox.width)).toBeLessThanOrEqual(2)
   await expect(page.getByRole('heading', { name: '实验分析', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Agent 助教', exact: true })).toBeVisible()
+  await expect(page.getByText('分析端 · 8000')).toHaveCount(0)
+  await expect(page.getByText('Agent 端 · 8001')).toHaveCount(0)
   expect(browserErrors).toEqual([])
 
   await page.screenshot({ path: 'test-results/guidelab-workbench-desktop.png', fullPage: false })

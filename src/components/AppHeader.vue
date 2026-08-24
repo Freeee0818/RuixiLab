@@ -21,15 +21,44 @@
           class="nav-item"
           >智慧课程</a
         >
+        <router-link
+          v-if="accessControlEnabled && accessState.isAdmin"
+          to="/admin/access"
+          class="nav-item"
+        >账号管理</router-link>
+        <div v-if="accessControlEnabled" class="account-area">
+          <span class="account-name">{{ accountLabel }}</span>
+          <button
+            v-if="accessState.source === 'account'"
+            class="logout-button"
+            type="button"
+            @click="handleLogout"
+          >退出</button>
+        </div>
       </nav>
     </div>
   </header>
 </template>
 
-<script>
-export default {
-  name: "AppHeader",
-};
+<script setup>
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  accessControlEnabled,
+  accessState,
+  logoutAccess,
+} from '@/utils/access'
+
+const router = useRouter()
+const accountLabel = computed(() => {
+  if (accessState.source === 'campus') return '校园网访客'
+  return accessState.displayName || accessState.username || '已登录'
+})
+
+async function handleLogout() {
+  await logoutAccess()
+  await router.push('/access')
+}
 </script>
 
 <style scoped>
@@ -106,13 +135,40 @@ export default {
   border-radius: 999px 999px 0 0;
 }
 
+.account-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 18px;
+  border-left: 1px solid var(--gl-border);
+}
+
+.account-name {
+  max-width: 112px;
+  overflow: hidden;
+  color: var(--gl-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-button {
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--gl-primary);
+  background: var(--gl-primary-soft);
+  cursor: pointer;
+}
+
 @media (max-width: 900px) {
   .header-container {
     padding: 0 20px;
   }
 
   .header-actions {
-    gap: 18px;
+    gap: 16px;
   }
 }
 
@@ -143,6 +199,11 @@ export default {
     scrollbar-width: none;
   }
 
+  .account-area {
+    flex: 0 0 auto;
+    padding-left: 12px;
+  }
+
   .header-actions::-webkit-scrollbar {
     display: none;
   }
@@ -154,4 +215,3 @@ export default {
   }
 }
 </style>
-

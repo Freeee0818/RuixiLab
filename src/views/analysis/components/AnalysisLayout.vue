@@ -5,10 +5,6 @@
         <h1>实验分析工作台</h1>
         <p>在同一屏完成数据处理、符号回归与 Agent 协作。</p>
       </div>
-      <div class="service-map" aria-label="服务分工">
-        <span><i></i>分析端 · 8000</span>
-        <span><i></i>Agent 端 · 8001</span>
-      </div>
     </header>
 
     <nav class="mobile-workspace-tabs" aria-label="工作区切换">
@@ -141,7 +137,6 @@ export default {
   padding: 14px clamp(20px, 2.4vw, 40px);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
   border-bottom: 1px solid var(--gl-border);
   background: #ffffff;
@@ -159,30 +154,6 @@ export default {
   margin: 5px 0 0;
   color: var(--gl-text-secondary);
   font-size: 13px;
-}
-
-.service-map {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  color: var(--gl-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.service-map span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.service-map i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--gl-primary);
-  box-shadow: 0 0 0 3px var(--gl-primary-soft);
 }
 
 .mobile-workspace-tabs {
@@ -331,12 +302,6 @@ export default {
 
   .workspace-context h1 {
     font-size: 18px;
-  }
-
-  .service-map {
-    width: 100%;
-    justify-content: space-between;
-    gap: 12px;
   }
 
   .workbench-pane {

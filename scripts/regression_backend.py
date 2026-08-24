@@ -148,10 +148,11 @@ def _post_analysis_upload(port: int) -> tuple[int, bytes]:
 
 
 @contextlib.contextmanager
-def _server(module: str):
+def _server(module: str, env_overrides: dict[str, str] | None = None):
     port = _free_port()
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    env.update(env_overrides or {})
     cmd = [sys.executable, "-m", module, "--host", HOST, "--port", str(port)]
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     proc = subprocess.Popen(
@@ -206,7 +207,7 @@ def _wait_until(predicate, timeout: float = 5.0, interval: float = 0.1) -> bool:
 
 
 def _run_compute_service_checks() -> Iterable[CheckResult]:
-    with _server("analysis_module.main") as port:
+    with _server("analysis_module.main", {"ACCESS_CONTROL_ENABLED": "false"}) as port:
         status, health = _json_request(port, "/health")
         yield _check(
             "compute /health",
@@ -247,7 +248,7 @@ def _run_compute_service_checks() -> Iterable[CheckResult]:
 
 
 def _run_ai_service_checks() -> Iterable[CheckResult]:
-    with _server("ai_module.main") as port:
+    with _server("ai_module.main", {"ACCESS_CONTROL_ENABLED": "false"}) as port:
         status, health = _json_request(port, "/health")
         yield _check(
             "ai /health",
@@ -268,11 +269,39 @@ def _run_ai_service_checks() -> Iterable[CheckResult]:
         status, _ = _request(port, "/service-status")
         yield _check("ai has no compute route", status == 404, f"status={status}")
 
+        status, _ = _request(port, "/auth/session")
+        yield _check("ai has no access route", status == 404, f"status={status}")
+
+
+def _run_access_service_checks() -> Iterable[CheckResult]:
+    with tempfile.TemporaryDirectory(prefix="guidelab_access_regression_") as tmp_dir:
+        env = {
+            "ACCESS_DB_PATH": str(Path(tmp_dir) / "access.sqlite3"),
+            "ACCESS_CONTROL_ENABLED": "false",
+        }
+        with _server("access_service.main", env) as port:
+            status, health = _json_request(port, "/health")
+            yield _check(
+                "access /health",
+                status == 200 and health.get("service") == "access" and health.get("status") == "ok",
+                str(health),
+            )
+
+            status, session = _json_request(port, "/auth/session")
+            yield _check(
+                "access /auth/session",
+                status == 200 and session.get("access_control_enabled") is False,
+                str(session),
+            )
+
+            status, _ = _request(port, "/analyze_experiment", method="POST", data=b"{}")
+            yield _check("access has no AI route", status == 404, f"status={status}")
+
 
 def _run_import_boundary_checks() -> Iterable[CheckResult]:
     probe = (
         "import sys; import ai_module.main; "
-        "forbidden=('pysr_module','analysis_module','pysr','numpy','pandas','matplotlib'); "
+        "forbidden=('access_service','sqlite3','pysr_module','analysis_module','pysr','numpy','pandas','matplotlib'); "
         "loaded=[name for name in sys.modules if name.split('.')[0] in forbidden]; "
         "print('\\n'.join(loaded)); raise SystemExit(1 if loaded else 0)"
     )
@@ -292,7 +321,7 @@ def _run_import_boundary_checks() -> Iterable[CheckResult]:
 
 
 def _run_remote_tool_checks() -> Iterable[CheckResult]:
-    with _server("analysis_module.main") as compute_port:
+    with _server("analysis_module.main", {"ACCESS_CONTROL_ENABLED": "false"}) as compute_port:
         from ai_module.agent import build_default_registries
         from config import settings
 
@@ -399,6 +428,7 @@ def main() -> int:
         _run_remote_tool_checks,
         _run_compute_service_checks,
         _run_ai_service_checks,
+        _run_access_service_checks,
         _run_queue_unit_checks,
     ):
         try:

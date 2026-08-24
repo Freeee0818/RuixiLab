@@ -27,6 +27,8 @@ import logging
 import subprocess
 import signal
 
+from pysr_module.fit_evaluation import evaluate_equation_fit
+
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1069,7 +1071,12 @@ class PySRService:
                 "equations": [],
                 "complexity_plot": None,
                 "fitting_plot": None,
-                "individual_plots": []
+                "individual_plots": [],
+                "fit_evaluation": {
+                    "method": "in_sample_diagnostics_v1",
+                    "scope": "observed_samples",
+                    "disclaimer": "数值指标不能替代量纲、外推稳定性和物理机制核验。",
+                },
             }
 
             if not equations_data:
@@ -1097,6 +1104,13 @@ class PySRService:
                     'complexity': eq_data.get('complexity', 0),
                     'score': eq_data.get('score', 0.0),
                     'loss': eq_data.get('loss', 0.0),
+                    'rationality': evaluate_equation_fit(
+                        equation_str,
+                        X,
+                        y,
+                        complexity=eq_data.get('complexity'),
+                        max_complexity=parameters.get('maxsize') if parameters else None,
+                    ),
                     'is_best': i == 0,
                     'has_plot': i == 0  # 标记是否已有图
                 }

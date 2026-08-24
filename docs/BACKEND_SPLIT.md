@@ -1,16 +1,17 @@
-# GuideLab 双后端部署
+# 睿析实验三后端部署
 
-GuideLab 现在只有两套正式后端，不再把 AI 问答挂进 PySR 进程：
+平台将计算、AI 和账号职责拆成三套正式后端：
 
 | 服务 | 默认端口 | 路由 | 重依赖 |
 |---|---:|---|---|
 | Compute | 8000 | `/analyze_data`、`/tasks`、`/service-status` | PySR、Julia、Matplotlib、SciPy |
 | AI | 8001 | `/analyze_experiment`、`/agent/capabilities` | LlamaIndex、Embedding、Qdrant、LLM API |
+| Access | 8002 | `/auth/session`、`/auth/login`、`/auth/admin/accounts` | FastAPI、SQLite |
 
 源代码按领域保留在现有包中，部署相关文件统一放在 `deploy/`。这样无需冒险搬动已经稳定的 Python
 导入路径，也能让计算、AI 和前端拥有各自独立的环境模板、启动脚本和上传包。
 
-## 构建三套上传包
+## 构建五套上传包
 
 ```bash
 python scripts/build_release.py
@@ -21,6 +22,7 @@ python scripts/build_release.py
 ```text
 guidelab-compute.zip / .tar.gz  # analysis_module + pysr_module，不含 Julia 二进制
 guidelab-ai.zip      / .tar.gz  # ai_module + rag_module，不含 PySR/Julia/知识文档
+guidelab-access.zip  / .tar.gz  # access_service + SQLite 账号逻辑，不含运行数据库
 guidelab-knowledge.zip / .tar.gz # 原始知识文档，独立低频更新，不含向量库
 guidelab-web.zip     / .tar.gz  # dist + Nginx location 模板
 manifest.json                    # 文件大小与 SHA-256
@@ -48,6 +50,15 @@ python -m venv .venv-ai
 source .venv-ai/bin/activate
 pip install -r ai_module/requirements.txt
 python -m ai_module.main --host 0.0.0.0 --port 8001
+```
+
+账号服务器（不安装模型、PySR 或 Julia）：
+
+```bash
+python -m venv .venv-access
+source .venv-access/bin/activate
+pip install -r access_service/requirements.txt
+python -m access_service.main --host 0.0.0.0 --port 8002
 ```
 
 如果 AI Agent 需要查询 PySR 任务状态，在 AI 服务器配置计算服务的内网地址：
@@ -84,6 +95,7 @@ MKL_NUM_THREADS=1
 ```dotenv
 VITE_COMPUTE_API_URL=/api
 VITE_AI_API_URL=/ai
+VITE_ACCESS_API_URL=/auth
 ```
 
 Nginx 示例：
@@ -99,6 +111,10 @@ location /ai/ {
     proxy_read_timeout 120s;
     proxy_pass http://127.0.0.1:8001/;
 }
+
+location /auth/ {
+    proxy_pass http://127.0.0.1:8002/auth/;
+}
 ```
 
 `/ai/` 必须关闭响应缓冲，否则 SSE 问答会在生成结束后一次性显示。
@@ -109,5 +125,4 @@ location /ai/ {
 python scripts/regression_backend.py
 ```
 
-回归脚本会验证：两套健康检查、路由互斥、绘图接口、Agent capability，以及 AI 导入时没有加载
-`pysr_module`、NumPy、Pandas 或 Matplotlib。
+回归测试会验证三套服务路由互斥、账号登录与管理、绘图接口、Agent capability，以及 AI 导入时没有加载账号数据库或计算栈。

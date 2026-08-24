@@ -128,7 +128,7 @@ def _cancel_analysis_task(
         session_token=_session_token(_context),
     )
 
-
+#Agent 判断问题需要查资料时调用这个 Tool。Tool 调用 rag_service.retrieve()，把来源片段返回给 Agent。
 def _search_physics_knowledge(query: str, top_k: int = 5) -> Dict[str, Any]:
     from rag_module.service import rag_service
 

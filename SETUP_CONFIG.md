@@ -97,6 +97,8 @@ Max Tokens: 2000
 | `COMPUTE_SERVICE_PORT` | 8000 | 绘图与 PySR 计算服务端口 |
 | `COMPUTE_SERVICE_URL` | `http://127.0.0.1:8000` | AI Tool 访问计算服务的内部地址 |
 | `AI_SERVICE_PORT` | 8001 | AI 问答/RAG 服务端口 |
+| `ACCESS_SERVICE_PORT` | 8002 | 邀请账号、登录与管理员服务端口 |
+| `ACCESS_DB_PATH` | `data/access.sqlite3` | 仅由账号服务读写的 SQLite 数据库 |
 | `PYSR_MAX_CONCURRENT_TASKS` | 3 | 同时运行的独立 PySR 任务数 |
 | `PYSR_PROCS_PER_TASK` | 2 | 单个 PySR 任务使用的 Julia 核心数 |
 | `PYSR_POPULATIONS_PER_TASK` | 6 | 单任务种群数，建议约为核心数的 3 倍 |

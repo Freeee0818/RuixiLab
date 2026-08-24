@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     )
 
     # ============= 应用基础配置 =============
-    APP_NAME: str = "GuideLab"
+    APP_NAME: str = "睿析实验"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = Field(default=False, description="调试模式")
 
@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     )
     AI_SERVICE_HOST: str = Field(default="0.0.0.0", description="AI 问答服务主机")
     AI_SERVICE_PORT: int = Field(default=8001, description="AI 问答服务端口")
+    ACCESS_SERVICE_HOST: str = Field(default="0.0.0.0", description="账号与访问控制服务主机")
+    ACCESS_SERVICE_PORT: int = Field(default=8002, description="账号与访问控制服务端口")
 
     # ============= CORS配置 =============
     CORS_ORIGINS: List[str] = Field(
@@ -92,6 +94,62 @@ class Settings(BaseSettings):
     CLASSROOM_SESSION_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = Field(
         default="lax",
         description="课堂会话 Cookie SameSite 策略",
+    )
+
+    # ============= 邀请访问与校园网放行 =============
+    ACCESS_CONTROL_ENABLED: bool = Field(
+        default=False,
+        description="启用邀请账号/校园网访问门禁",
+    )
+    ACCESS_ADMIN_EMAIL: str = Field(
+        default="wangcheng308@bupt.edu.cn",
+        description="访问申请邮箱",
+    )
+    ACCESS_COOKIE_NAME: str = Field(
+        default="guidelab_access",
+        description="邀请账号登录 Cookie 名称",
+    )
+    ACCESS_TOKEN_TTL_SECONDS: int = Field(
+        default=28800,
+        ge=900,
+        le=604800,
+        description="邀请账号登录有效期，默认 8 小时",
+    )
+    ACCESS_TRUSTED_NETWORKS: List[str] = Field(
+        default=[],
+        description="免登录校园网 CIDR 列表；access、AI 与 compute 必须一致",
+    )
+    ACCESS_DB_PATH: str = Field(
+        default="data/access.sqlite3",
+        description="access 服务保存邀请账号的 SQLite 路径",
+    )
+    ACCESS_BOOTSTRAP_ADMIN_USERNAME: str = Field(
+        default="",
+        description="首次启动时创建的管理员用户名",
+    )
+    ACCESS_BOOTSTRAP_ADMIN_PASSWORD: str = Field(
+        default="",
+        description="首次启动管理员密码，已存在账号时不会重置",
+    )
+    ACCESS_BOOTSTRAP_ADMIN_DISPLAY_NAME: str = Field(
+        default="系统管理员",
+        description="首次启动管理员显示名称",
+    )
+    ACCESS_BOOTSTRAP_ADMIN_EMAIL: str = Field(
+        default="wangcheng308@bupt.edu.cn",
+        description="首次启动管理员邮箱",
+    )
+    ACCESS_LOGIN_MAX_ATTEMPTS: int = Field(
+        default=8,
+        ge=3,
+        le=100,
+        description="单个 IP 在限流窗口内的最大登录尝试数",
+    )
+    ACCESS_LOGIN_WINDOW_SECONDS: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="登录失败限流窗口",
     )
 
     # ============= AI服务配置 =============
@@ -301,6 +359,7 @@ class Settings(BaseSettings):
             "KNOWLEDGE_BASE_DIR", "RAG_RAW_DIR", "RAG_PARSED_DIR",
             "RAG_META_DIR", "RAG_VECTOR_DIR",
             "PYSR_OUTPUT_DIR", "PYSR_PLOTS_DIR", "LOG_DIR", "LOG_FILE",
+            "ACCESS_DB_PATH",
         ):
             value = getattr(self, attr, None)
             if value and not os.path.isabs(value):
@@ -360,6 +419,13 @@ class Settings(BaseSettings):
             self.RAG_VECTOR_DIR,
         ])
 
+    def ensure_access_directories(self) -> None:
+        """创建账号服务自己的数据库和日志目录。"""
+        self._ensure_directories([
+            os.path.dirname(self.ACCESS_DB_PATH) or self.DATA_DIR,
+            self.LOG_DIR,
+        ])
+
     def ensure_compute_directories(self) -> None:
         """创建绘图和 PySR 计算服务自己的目录。"""
         self._ensure_directories([
@@ -376,6 +442,7 @@ class Settings(BaseSettings):
         """兼容旧调用：创建两套服务所需的全部目录。"""
         self.ensure_ai_directories()
         self.ensure_compute_directories()
+        self.ensure_access_directories()
 
 
 # 创建全局配置实例
@@ -389,7 +456,7 @@ if settings.DEBUG:
     print(f"调试模式: {settings.DEBUG}")
     print(f"计算服务: {settings.COMPUTE_SERVICE_HOST}:{settings.COMPUTE_SERVICE_PORT}")
     print(f"AI服务: {settings.AI_SERVICE_HOST}:{settings.AI_SERVICE_PORT}")
+    print(f"账号服务: {settings.ACCESS_SERVICE_HOST}:{settings.ACCESS_SERVICE_PORT}")
     print(f"使用AI: {'学校API' if settings.USE_SCHOOL_API else '自定义API'}")
     print(f"数据目录: {settings.DATA_DIR}")
     print("="*50 + "\n")
-

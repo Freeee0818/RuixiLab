@@ -28,10 +28,10 @@
         </div>
       </div>
 
-      <div class="hero-workbench" aria-label="GuideLab 分析工作台预览">
+      <div class="hero-workbench" aria-label="睿析实验分析工作台预览">
         <div class="preview-toolbar">
           <span></span><span></span><span></span>
-          <strong>GuideLab Workbench</strong>
+          <strong>睿析实验工作台</strong>
         </div>
         <div class="preview-body">
           <section>
@@ -357,4 +357,3 @@ export default {
   }
 }
 </style>
-

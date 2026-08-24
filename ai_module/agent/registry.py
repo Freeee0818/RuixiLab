@@ -149,6 +149,36 @@ class ToolRegistry:
             for tool in self._tools.values()
         ]
 
+    def validate_arguments(
+        self,
+        name: str,
+        arguments: Any,
+        *,
+        allowed_tools: Iterable[str],
+    ) -> Dict[str, Any]:
+        """Parse and validate a tool call without executing its handler.
+
+        This is shared by the live runner and offline evaluation so that both
+        use exactly the same permission and JSON-Schema contract.
+        """
+        allowed = set(allowed_tools)
+        if name not in allowed:
+            raise ValueError("当前 Skill 未授权调用该工具")
+
+        spec = self._tools.get(name)
+        if not spec:
+            raise ValueError("工具不存在")
+
+        parsed = json.loads(arguments) if isinstance(arguments, str) else arguments
+        parsed = parsed or {}
+        if not isinstance(parsed, dict):
+            raise ValueError("工具参数必须是 JSON 对象")
+        try:
+            _validate_schema(parsed, spec.parameters)
+        except ValueError as exc:
+            raise ValueError(f"工具参数不符合 Schema: {exc}") from exc
+        return parsed
+
     async def execute(
         self,
         name: str,
@@ -158,33 +188,13 @@ class ToolRegistry:
         context: Optional[Dict[str, Any]] = None,
     ) -> ToolExecution:
         started = time.perf_counter()
-        allowed = set(allowed_tools)
-        if name not in allowed:
-            return ToolExecution(
-                name=name,
-                ok=False,
-                error="当前 Skill 未授权调用该工具",
-                duration_ms=int((time.perf_counter() - started) * 1000),
-            )
-
-        spec = self._tools.get(name)
-        if not spec:
-            return ToolExecution(
-                name=name,
-                ok=False,
-                error="工具不存在",
-                duration_ms=int((time.perf_counter() - started) * 1000),
-            )
-
         try:
-            parsed = json.loads(arguments) if isinstance(arguments, str) else arguments
-            parsed = parsed or {}
-            if not isinstance(parsed, dict):
-                raise ValueError("工具参数必须是 JSON 对象")
-            try:
-                _validate_schema(parsed, spec.parameters)
-            except ValueError as exc:
-                raise ValueError(f"工具参数不符合 Schema: {exc}") from exc
+            parsed = self.validate_arguments(
+                name,
+                arguments,
+                allowed_tools=allowed_tools,
+            )
+            spec = self._tools[name]
 
             if "_context" in inspect.signature(spec.handler).parameters:
                 parsed["_context"] = context or {}
