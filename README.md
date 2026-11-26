@@ -150,7 +150,7 @@ python -m pip install -r analysis_module/requirements.txt
 python -m analysis_module.main --port 8000
 ```
 
-Windows PowerShell 激活命令：
+Windows PowerShell 使用各自环境的激活脚本，下面以计算服务为例：
 
 ```powershell
 .\.venv-compute\Scripts\Activate.ps1
@@ -215,8 +215,9 @@ python scripts/evaluate_rag.py --output rag-report.json
 ## 项目结构
 
 ```text
-GuideLab/
+RuixiLab/
 ├── src/                    # Vue 3 前端
+├── access_service/         # 账号、登录会话与管理员接口
 ├── ai_module/              # AI API、Agent Runner、Skill 与 Tool
 ├── rag_module/             # 文档切分、入库、混合检索与重排
 ├── analysis_module/        # 计算服务入口与绘图接口
@@ -224,7 +225,7 @@ GuideLab/
 ├── service_common/         # 会话、CORS、健康检查等共享边界
 ├── config/                 # pydantic-settings 配置
 ├── knowledge_base/         # 原始资料、评测集和本地索引
-├── deploy/                 # AI/Compute/Web/Nginx 部署说明
+├── deploy/                 # Web、三个后端、Docker 与 Nginx 部署配置
 ├── scripts/                # 入库、评测、回归、压测与发布脚本
 ├── tests/                  # Agent、会话、调度与 RAG 测试
 └── docs/                   # 架构、部署和扩展文档

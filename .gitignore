@@ -31,6 +31,7 @@ venv/
 ENV/
 env/
 .venv
+.venv-*/
 
 # Docker deployment templates live in a directory named `env`; keep only the
 # examples in Git while the copied secret-bearing files remain ignored.
