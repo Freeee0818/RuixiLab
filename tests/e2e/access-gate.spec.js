@@ -70,6 +70,9 @@ test('invited account logs in and returns to requested page', async ({ page }) =
 })
 
 test('administrator can open browser account management', async ({ page }) => {
+  await page.route('**/auth/admin/classes', (route) => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ classes: [] }),
+  }))
   await page.route('**/auth/session', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',

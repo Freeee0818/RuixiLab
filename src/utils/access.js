@@ -104,6 +104,18 @@ export async function listAccessAccounts() {
   return request('/admin/accounts')
 }
 
+export async function listAccessClasses() {
+  return request('/admin/classes')
+}
+
+export async function createAccessClass(name) {
+  return request('/admin/classes', { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export async function listAccessClassAccounts(classId) {
+  return request(`/admin/classes/${encodeURIComponent(classId)}/accounts`)
+}
+
 export async function createAccessAccount(payload) {
   return request('/admin/accounts', {
     method: 'POST',

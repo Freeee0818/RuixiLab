@@ -26,6 +26,11 @@
           to="/admin/access"
           class="nav-item"
         >账号管理</router-link>
+        <router-link
+          v-if="accessControlEnabled && accessState.isAdmin"
+          to="/admin/classes"
+          class="nav-item"
+        >班级管理</router-link>
         <div v-if="accessControlEnabled" class="account-area">
           <span class="account-name">{{ accountLabel }}</span>
           <button

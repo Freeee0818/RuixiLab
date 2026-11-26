@@ -39,6 +39,7 @@ class AccountCreatePayload(BaseModel):
     display_name: str = ""
     email: str = ""
     is_admin: bool = False
+    class_id: Optional[int] = Field(default=None, gt=0, strict=True)
 
 
 class AccountUpdatePayload(BaseModel):
@@ -47,6 +48,11 @@ class AccountUpdatePayload(BaseModel):
     password: Optional[str] = None
     enabled: Optional[bool] = None
     is_admin: Optional[bool] = None
+    class_id: Optional[int] = Field(default=None, gt=0, strict=True)
+
+
+class ClassCreatePayload(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
 
 
 class LoginAttemptLimiter:
@@ -208,6 +214,7 @@ async def create_account(payload: AccountCreatePayload, request: Request):
             email=payload.email,
             is_admin=payload.is_admin,
             created_by=admin.username,
+            class_id=payload.class_id,
         )
     except AccountConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -242,6 +249,7 @@ async def update_account(username: str, payload: AccountUpdatePayload, request: 
             password=payload.password,
             enabled=payload.enabled,
             is_admin=payload.is_admin,
+            **({"class_id": payload.class_id} if "class_id" in payload.model_fields_set else {}),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="账号不存在") from exc
@@ -250,6 +258,34 @@ async def update_account(username: str, payload: AccountUpdatePayload, request: 
     except AccountValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"account": account}
+
+
+@router.get("/admin/classes")
+async def list_classes(request: Request):
+    _require_current_admin(request)
+    return {"classes": get_account_store().list_classes()}
+
+
+@router.post("/admin/classes", status_code=201)
+async def create_class(payload: ClassCreatePayload, request: Request):
+    admin = _require_current_admin(request)
+    try:
+        classroom = get_account_store().create_class(payload.name, created_by=admin.username)
+    except AccountConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AccountValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"class": classroom}
+
+
+@router.get("/admin/classes/{class_id}/accounts")
+async def list_class_accounts(class_id: int, request: Request):
+    _require_current_admin(request)
+    try:
+        accounts = get_account_store().list_class_accounts(class_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="班级不存在") from exc
+    return {"accounts": accounts}
 
 
 __all__ = ["get_account_store", "router"]

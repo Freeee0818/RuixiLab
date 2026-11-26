@@ -35,6 +35,12 @@ const router = createRouter({
       component: () => import("@/views/AdminAccountsView.vue"),
       meta: { requiresAdmin: true },
     },
+    {
+      path: "/admin/classes",
+      name: "class-admin",
+      component: () => import("@/views/ClassManagementView.vue"),
+      meta: { requiresAdmin: true },
+    },
     // 兼容旧路由（可选）
     {
       path: "/symbolic-regression",

@@ -1,6 +1,7 @@
 .git
 .github
 .cache
+private
 .pytest_cache
 .venv*
 venv*

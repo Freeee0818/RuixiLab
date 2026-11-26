@@ -58,6 +58,7 @@ release/
 
 # ==================== 数据和输出文件 ====================
 .cache/
+private/
 data/
 outputs/
 pysr_module/output/

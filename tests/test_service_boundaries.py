@@ -99,12 +99,12 @@ class ServiceBoundaryTests(unittest.TestCase):
             settings.ACCESS_DB_PATH = str(Path(temp_dir) / "access.sqlite3")
             get_account_store.cache_clear()
             try:
-                access_paths = {route.path for route in create_access_app().routes}
+                access_paths = set(create_access_app().openapi()["paths"])
             finally:
                 get_account_store.cache_clear()
                 settings.ACCESS_DB_PATH = original_access_db
-        ai_paths = {route.path for route in create_ai_app().routes}
-        compute_paths = {route.path for route in create_compute_app().routes}
+        ai_paths = set(create_ai_app().openapi()["paths"])
+        compute_paths = set(create_compute_app().openapi()["paths"])
 
         self.assertIn("/analyze_experiment", ai_paths)
         self.assertNotIn("/auth/login", ai_paths)
@@ -157,6 +157,7 @@ class ServiceBoundaryTests(unittest.TestCase):
         self.assertEqual(default["tournament_selection_n"], 15)
 
     def test_release_packages_keep_service_boundaries(self):
+        from scripts import build_release
         from scripts.build_release import PACKAGE_SPECS, _package_files
 
         package_paths = {
@@ -166,7 +167,21 @@ class ServiceBoundaryTests(unittest.TestCase):
         compute = package_paths["guidelab-compute"]
         ai = package_paths["guidelab-ai"]
         access = package_paths["guidelab-access"]
-        knowledge = package_paths["guidelab-knowledge"]
+        # Raw teaching documents are intentionally ignored by Git. Exercise the
+        # knowledge archive with disposable files, independent of local data.
+        knowledge_spec = next(spec for spec in PACKAGE_SPECS if spec.name == "guidelab-knowledge")
+        with tempfile.TemporaryDirectory() as directory:
+            fixture_root = Path(directory)
+            for name in (
+                "raw_docs/fixture.txt", "evaluation/rag_queries.jsonl",
+                "vector_store/fixture.json", "model_cache/fixture.json",
+                "raw_docs/.ingestion_index.json",
+            ):
+                fixture = fixture_root / "knowledge_base" / name
+                fixture.parent.mkdir(parents=True, exist_ok=True)
+                fixture.write_text("fixture", encoding="utf-8")
+            with patch.object(build_release, "PROJECT_ROOT", fixture_root):
+                knowledge = {archive_path for _, archive_path in _package_files(knowledge_spec)}
         web = package_paths["guidelab-web"]
 
         self.assertTrue(any(path.startswith("analysis_module/") for path in compute))
@@ -190,6 +205,7 @@ class ServiceBoundaryTests(unittest.TestCase):
 
         self.assertTrue(any(path.startswith("access_service/") for path in access))
         self.assertIn("access_service/main.py", access)
+        self.assertIn("access_service/import_class_accounts.py", access)
         self.assertIn("INVITATION_ACCESS.md", access)
         self.assertFalse(any(path.startswith("ai_module/") for path in access))
         self.assertFalse(any(path.startswith("analysis_module/") for path in access))
